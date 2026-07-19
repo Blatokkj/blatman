@@ -37,12 +37,6 @@ make -j$(nproc)
 sudo cmake --install .  # ou copie para ~/.local/bin/
 ```
 
-### Instalação rápida (Arch Linux)
-```bash
-# Se estiver no AUR
-yay -S blatman
-```
-
 ## 🎯 Uso
 
 ### Comandos principais
