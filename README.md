@@ -101,6 +101,18 @@ blatman install https://github.com/spring-projects/spring-boot
 | **Autotools** | `configure*` | `./configure && make` |
 | **Go** | `go.mod` | `go build -trimpath -ldflags="-s -w"` |
 
+## ⚒️ Testes prévios
+
+| Projeto | Requisito | Conclusão |
+|---------|---------------------|------------------|
+| **Catch2** | `CMake` | `Teste bem sucedido.` |
+| **GoAnime** | `Go` | `Teste bem sucedido.` |
+| **Cava** | `Cmake` | `Teste bem sucedido.` |
+| **Hiredis** | `Cmake` | `Teste bem sucedido.` |
+| **Bottom/btm** | `Cargo` | `Teste bem sucedido.` |
+| **Lazygit** | `Go` | `Teste bem sucedido.` |
+| **Tty-clock** | `Make` | `Teste bem sucedido.` |
+
 ## ⚙️ Modo Baixa Memória
 
 Ativado automaticamente quando:
