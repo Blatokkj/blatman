@@ -25,7 +25,7 @@
 
 ```bash
 # Clone o repositório
-git clone https://github.com/seu-usuario/blatman.git
+git clone https://github.com/Blatokkj/blatman.git
 cd blatman
 
 # Compile
