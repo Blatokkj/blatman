@@ -191,4 +191,4 @@ MIT License - veja [LICENSE](LICENSE) para detalhes.
 
 ---
 
-**Blatman** - Compile qualquer projeto GitHub sem dor de cabeça. 🛠️
+**Blatman** - Compile qualquer projeto GitHub. 🛠️
