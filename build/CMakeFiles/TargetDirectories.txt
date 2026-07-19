@@ -1,0 +1,7 @@
+/home/blato/blatman/build/CMakeFiles/blatman.dir
+/home/blato/blatman/build/CMakeFiles/edit_cache.dir
+/home/blato/blatman/build/CMakeFiles/rebuild_cache.dir
+/home/blato/blatman/build/CMakeFiles/list_install_components.dir
+/home/blato/blatman/build/CMakeFiles/install.dir
+/home/blato/blatman/build/CMakeFiles/install/local.dir
+/home/blato/blatman/build/CMakeFiles/install/strip.dir
