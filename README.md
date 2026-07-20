@@ -107,7 +107,7 @@ blatman install https://github.com/spring-projects/spring-boot
 |---------|---------------------|------------------|
 | **Catch2** | `CMake` | `Teste bem sucedido.` |
 | **GoAnime** | `Go` | `Teste bem sucedido.` |
-| **Cava** | `Cmake` | `Teste bem sucedido.` |
+| **Cava** | `Autotools` | `Teste bem sucedido.` |
 | **Hiredis** | `Cmake` | `Teste bem sucedido.` |
 | **Bottom/btm** | `Cargo` | `Teste bem sucedido.` |
 | **Lazygit** | `Go` | `Teste bem sucedido.` |
