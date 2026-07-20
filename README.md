@@ -191,10 +191,6 @@ O Blatman tenta instalar automaticamente via package manager (pacman/apt/dnf/zyp
 4. Push: `git push origin feature/nova-funcionalidade`
 5. Abra Pull Request
 
-## 📄 Licença
-
-MIT License - veja [LICENSE](LICENSE) para detalhes.
-
 ---
 
 **Blatman** - Compile qualquer projeto GitHub. 🛠️
