@@ -1,5 +1,10 @@
 #include "commands.hpp"
+#include "functions/install.hpp"
+
 #include <iostream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 void printHelp()
 {
@@ -28,22 +33,43 @@ Exemplos:
 )";
 }
 
-void installCommand()
+void installCommand(const std::string& argument)
 {
-    std::cout << "Install ainda nao implementado.\n";
+    if (argument.empty())
+    {
+        std::cout << "Erro: informe a URL do repositorio.\n";
+        return;
+    }
+
+    fs::path destination =
+        fs::current_path() / "blatman-cache";
+
+    Install installer;
+
+    std::cout << "Clonando: " << argument << '\n';
+    std::cout << "Destino: " << destination << '\n';
+
+    if (installer.clone(argument, destination))
+    {
+        std::cout << "Repositorio clonado com sucesso!\n";
+    }
+    else
+    {
+        std::cout << "Falha ao clonar o repositorio.\n";
+    }
 }
 
-void removeCommand()
+void removeCommand(const std::string& argument)
 {
     std::cout << "Remove ainda nao implementado.\n";
 }
 
-void updateCommand()
+void updateCommand(const std::string& argument)
 {
     std::cout << "Update ainda nao implementado.\n";
 }
 
-void buildCommand()
+void buildCommand(const std::string& argument)
 {
     std::cout << "Build ainda nao implementado.\n";
 }
@@ -70,7 +96,9 @@ Command parseCommand(const std::string& command)
     return Command::Unknown;
 }
 
-void executeCommand(Command command)
+void executeCommand(
+    Command command,
+    const std::string& argument)
 {
     switch (command)
     {
@@ -79,19 +107,19 @@ void executeCommand(Command command)
             break;
 
         case Command::Install:
-            installCommand();
+            installCommand(argument);
             break;
 
         case Command::Remove:
-            removeCommand();
+            removeCommand(argument);
             break;
 
         case Command::Update:
-            updateCommand();
+            updateCommand(argument);
             break;
 
         case Command::Build:
-            buildCommand();
+            buildCommand(argument);
             break;
 
         case Command::Unknown:
