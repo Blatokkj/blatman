@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -8,7 +9,7 @@ namespace fs = std::filesystem;
 class Install
 {
 public:
-    bool clone(
+    std::optional<fs::path> clone(
         const std::string& url,
-        const fs::path& destination) const;
+        const fs::path& cacheRoot) const;
 };

@@ -1,5 +1,7 @@
 #include "commands.hpp"
-#include "functions/install.hpp"
+#include "operations/install.hpp"
+#include "builderDetector.hpp"
+#include "operations/build.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -18,6 +20,7 @@ Comandos:
   install <pacote>       Instala um pacote
   remove <pacote>        Remove um pacote
   update                 Atualiza os pacotes
+  update <pacote>        Atualiza um pacote específico
   build <projeto>        Detecta e executa o sistema de build
   help                   Mostra esta ajuda
 
@@ -37,25 +40,76 @@ void installCommand(const std::string& argument)
 {
     if (argument.empty())
     {
-        std::cout << "Erro: informe a URL do repositorio.\n";
+        std::cerr << "Erro: informe a URL do repositório.\n";
         return;
     }
+    
+    try
+    {
+        fs::path cacheRoot = fs::current_path() / "blatman-cache";
 
-    fs::path destination =
-        fs::current_path() / "blatman-cache";
 
     Install installer;
 
     std::cout << "Clonando: " << argument << '\n';
-    std::cout << "Destino: " << destination << '\n';
 
-    if (installer.clone(argument, destination))
+    const auto repositoryPath = installer.clone(argument, cacheRoot);
+
+    if (!repositoryPath)
     {
-        std::cout << "Repositorio clonado com sucesso!\n";
+        std::cerr << "Operação de instalação interrompida.\n";
+        return;
     }
-    else
+
+    std::cout << "Repositório clonado com sucesso!\n";
+    std::cout << "Procurando sistema de build...\n";
+
+    BuildDetector detector;
+    BuildSystem system = detector.detect(*repositoryPath);
+
+    const char* name = "";
+
+    switch (system)
     {
-        std::cout << "Falha ao clonar o repositorio.\n";
+        case BuildSystem::CMake:
+            name = "CMake";
+            break;
+        case BuildSystem::Make:
+            name = "Make";
+            break;
+        case BuildSystem::Meson:
+            name = "Meson";
+            break;
+        case BuildSystem::Cargo:
+            name = "Cargo";
+            break;
+        case BuildSystem::Npm:
+            name = "Npm";
+            break;
+        case BuildSystem::Maven:
+            name = "Maven";
+            break;
+        case BuildSystem::Gradle:
+            name = "Gradle";
+            break;
+        case BuildSystem::Autotools:
+            name = "Autotools";
+            break;
+        case BuildSystem::Go:
+            name = "Go";
+            break;
+        case BuildSystem::Unknown:
+            std::cout << "Nenhum sistema de build reconhecido.\n";
+            return;
+    }
+    
+            std::cout << "Sistema detectado: " << name << '\n';
+    }
+
+    catch (const fs::filesystem_error& error)
+    {
+        std::cerr << "Erro de filesystem durante a instalacao: "
+                  << error.what() << '\n';
     }
 }
 
@@ -71,7 +125,36 @@ void updateCommand(const std::string& argument)
 
 void buildCommand(const std::string& argument)
 {
-    std::cout << "Build ainda nao implementado.\n";
+    if (argument.empty())
+    {
+        std::cerr << "Erro: informe o diretorio do projeto.\n";
+        return;
+    }
+
+    const fs::path projectPath = argument;
+
+    try
+    {
+        if (!fs::is_directory(projectPath))
+        {
+            std::cerr << "Erro: informe um diretorio existente.\n";
+            return;
+        }
+
+        BuildDetector detector;
+        const BuildSystem system = detector.detect(projectPath);
+
+        Build builder;
+
+        if (!builder.run(projectPath, system))
+            return;
+
+        std::cout << "Build concluido com sucesso!\n";
+    }
+    catch (const fs::filesystem_error& error)
+    {
+        std::cerr << "Erro de filesystem: " << error.what() << '\n';
+    }
 }
 
 Command parseCommand(const std::string& command)
@@ -81,16 +164,24 @@ Command parseCommand(const std::string& command)
         command == "-h")
         return Command::Help;
 
-    if (command == "install")
+    if (command == "install" ||
+        command == "-S" ||
+        command == "-i")
         return Command::Install;
 
-    if (command == "remove")
+    if (command == "remove" ||
+        command == "-R" ||
+        command == "-r")
         return Command::Remove;
 
-    if (command == "update")
+    if (command == "update" ||
+        command == "-U" ||
+        command == "-u")
         return Command::Update;
 
-    if (command == "build")
+    if (command == "build" ||
+        command == "-B" ||
+        command == "-b")
         return Command::Build;
 
     return Command::Unknown;

@@ -14,6 +14,10 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath) const
     if (fs::exists(repoPath / "go.mod"))
         return BuildSystem::Go;
 
+    if (fs::exists(repoPath / "configure") ||
+    fs::exists(repoPath / "configure.ac"))
+        return BuildSystem::Autotools;
+
     if (fs::exists(repoPath / "Makefile"))
         return BuildSystem::Make;
 
@@ -26,10 +30,6 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath) const
     if (fs::exists(repoPath / "build.gradle") ||
         fs::exists(repoPath / "build.gradle.kts"))
         return BuildSystem::Gradle;
-
-    if (fs::exists(repoPath / "configure") ||
-        fs::exists(repoPath / "configure.ac"))
-        return BuildSystem::Autotools;
 
     return BuildSystem::Unknown;
 }
