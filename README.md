@@ -24,17 +24,16 @@
 ### Baixar e compilar
 
 ```bash
-# Clone o repositório
+# clone o repositório.
 git clone https://github.com/Blatokkj/blatman.git
 cd blatman
 
-# Compile
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+# use o cmake para criação de build.
+cmake -S . -B build
+cmake --build build
 
-# Instale (opcional - adiciona ao PATH)
-sudo cmake --install .  # ou copie para ~/.local/bin/
+# transfira a build pro /usr/bin/
+sudo cmake --install build
 ```
 
 ## 🎯 Uso
