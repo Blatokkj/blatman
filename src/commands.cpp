@@ -2,9 +2,12 @@
 #include "operations/install.hpp"
 #include "builderDetector.hpp"
 #include "operations/build.hpp"
+#include "dependencies.hpp"
 
 #include <iostream>
 #include <filesystem>
+#include <set>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -61,7 +64,7 @@ void installCommand(const std::string& argument)
         return;
     }
 
-    std::cout << "Repositório clonado com sucesso!\n";
+    std::cout << "Repositório pronto para compilação.\n";
     std::cout << "Procurando sistema de build...\n";
 
     BuildDetector detector;
@@ -103,14 +106,103 @@ void installCommand(const std::string& argument)
             return;
     }
     
-            std::cout << "Sistema detectado: " << name << '\n';
-    }
+        std::cout << "Sistema detectado: " << name << '\n';
 
-    catch (const fs::filesystem_error& error)
+    Build builder;
+
+    // Guarda os conjuntos de requisitos que ja tentamos resolver.
+    std::set<std::vector<std::string>> attemptedDependencies;
+
+    while (true)
     {
-        std::cerr << "Erro de filesystem durante a instalacao: "
-                  << error.what() << '\n';
-    }
+        const CommandResult result =
+            builder.run(*repositoryPath, system);
+
+        if (result.success)
+            break;
+
+        const std::vector<std::string> missing =
+            findMissingDependencies(result.output);
+
+        if (missing.empty())
+        {
+            std::cerr
+                << "Build falhou, mas nenhum diagnostico de dependencia "
+                << "suportado foi reconhecido. Confira a saida acima.\n";
+            return;
+        }
+
+        if (attemptedDependencies.contains(missing))
+        {
+            std::cerr
+                << "Os mesmos requisitos continuam nao localizados "
+                << "após uma tentativa de resolução.\n";
+            return;
+       }
+
+        attemptedDependencies.insert(missing);
+
+        for (const auto& dependency : missing)
+        {
+            if (!resolveDependency(dependency))
+            {
+                std::cerr << "Resolução interrompida.\n";
+                return;
+            }
+        }
+
+    std::cout << "Tentando compilar novamente...\n";
+}
+
+        std::cout << "Compilação concluida!\n";
+        if (system == BuildSystem::CMake)
+        {
+            if (!installer.installCMake(*repositoryPath / "build"))
+            {
+                std::cerr << "Falha na instalação do projeto.\n";
+                return;
+            }
+
+            std::cout << "Instalação concluida!\n";
+            return;
+        }
+        std::cout << "Diretório do projeto: " << *repositoryPath << '\n';
+        std::cout << "Caminho do executável relativo ao projeto: ";
+
+        std::string executableArgument;
+
+        if (!std::getline(std::cin, executableArgument) ||
+            executableArgument.empty())
+            {
+                std::cerr << "Executável não informado. Instalação interrompida.\n";
+                return;
+            }
+
+            const fs::path relativeExecutable = executableArgument;
+
+            if (relativeExecutable.is_absolute())
+            {
+                std::cerr << "Informe um caminho relativo ao diretório do projeto.\n";
+                return;
+            }
+
+            if (!installer.installExecutable(
+                *repositoryPath, relativeExecutable))
+            {
+                std::cerr << "Instalação interrompida.\n";
+                return;
+            }
+
+            std::cout << "Executável instalado em "
+                << fs::path("/usr/bin") / relativeExecutable.filename()
+                << '\n';
+        }
+
+        catch (const fs::filesystem_error& error)
+        {
+            std::cerr << "Erro de filesystem durante a instalação: "
+            << error.what() << '\n';
+        }
 }
 
 void removeCommand(const std::string& argument)
@@ -146,7 +238,8 @@ void buildCommand(const std::string& argument)
 
         Build builder;
 
-        if (!builder.run(projectPath, system))
+        const CommandResult result = builder.run(projectPath, system);
+        if (!result.success)
             return;
 
         std::cout << "Build concluido com sucesso!\n";
@@ -215,7 +308,6 @@ void executeCommand(
 
         case Command::Unknown:
             std::cout << "Comando desconhecido.\n";
-            printHelp();
             break;
     }
 }

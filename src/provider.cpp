@@ -17,7 +17,7 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
                 "apt",
                 "install",
                 "remove",
-                "update"
+                "upgrade"
             };
 
         case packageManager::Dnf:
@@ -41,7 +41,7 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
                 "brew",
                 "install",
                 "uninstall",
-                "update"
+                "upgrade"
             };
 
         case packageManager::Unknown:

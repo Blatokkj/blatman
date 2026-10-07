@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-bool Build::run(
+CommandResult Build::run(
     const fs::path& projectPath,
     BuildSystem system) const
 {
@@ -17,11 +17,14 @@ bool Build::run(
     switch (system)
     {
        case BuildSystem::CMake:
-           commands = {
-                "cmake -S . -B build",
-                "cmake --build build"
-            };
-            break;
+        commands = {
+            "cmake -S . -B build "
+            "-DCMAKE_INSTALL_PREFIX=/usr "
+            "-DCMAKE_INSTALL_BINDIR=bin "
+            "-DCMAKE_INSTALL_LIBDIR=lib",
+            "cmake --build build"
+        };
+        break;
 
         case BuildSystem::Make:
             commands = {
@@ -78,11 +81,11 @@ bool Build::run(
 
         case BuildSystem::Unknown:
             std::cerr << "Nenhum sistema de build reconhecido.\n";
-            return false;
+            return {false, ""};;
 
         default:
             std::cerr << "Sistema de build invalido.\n";
-            return false;
+            return {false, ""};;
     }
 
     const std::string directoryCommand =
@@ -92,14 +95,15 @@ bool Build::run(
     {
         std::cout << "Executando: " << command << '\n';
 
-        const std::string fullCommand = directoryCommand + command;
+        CommandResult result =
+            runShell(directoryCommand + command);
 
-        if (std::system(fullCommand.c_str()) != 0)
+        if (!result.success)
         {
             std::cerr << "Falha ao executar: " << command << '\n';
-            return false;
+            return result;
         }
     }
 
-    return true;
+    return {true, ""};
 }
