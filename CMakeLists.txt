@@ -18,3 +18,7 @@ add_executable(blatman ${SOURCES})
 target_include_directories(blatman PRIVATE
     ${PROJECT_SOURCE_DIR}/include
 )
+
+install(TARGETS blatman
+    RUNTIME DESTINATION bin
+)
