@@ -13,13 +13,13 @@ enum class Command
 
 Command parseCommand(const std::string& command);
 
-void executeCommand(
+bool executeCommand(
     Command command,
     const std::string& argument
 );
 
 void printHelp();
-void installCommand(const std::string& argument);
-void removeCommand(const std::string& argument);
-void updateCommand(const std::string& argument);
-void buildCommand(const std::string& argument);
+bool installCommand(const std::string& argument);
+bool removeCommand(const std::string& argument);
+bool updateCommand(const std::string& argument);
+bool buildCommand(const std::string& argument);

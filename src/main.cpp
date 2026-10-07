@@ -1,22 +1,27 @@
-#include "packageManager.hpp"
 #include "commands.hpp"
 
-int main(int argc, char* argv[])
+#include <cstdlib>
+#include <exception>
+#include <iostream>
+
+int main(int argc, char *argv[])
 {
-    if (argc < 2)
+    if (argc > 3)
     {
-        executeCommand(Command::Help, "");
-        return 0;
+        std::cerr << "Erro: argumentos em excesso. Consulte blatman help.\n";
+        return EXIT_FAILURE;
     }
 
-    Command command = parseCommand(argv[1]);
+    const Command command = argc < 2 ? Command::Help : parseCommand(argv[1]);
+    const std::string argument = argc >= 3 ? argv[2] : "";
 
-    std::string argument;
-
-    if (argc >= 3)
-        argument = argv[2];
-
-    executeCommand(command, argument);
-
-    return 0;
+    try
+    {
+        return executeCommand(command, argument) ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "Erro: " << error.what() << '\n';
+        return EXIT_FAILURE;
+    }
 }

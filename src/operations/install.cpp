@@ -1,6 +1,7 @@
 #include "operations/install.hpp"
 #include "shell.hpp"
 #include "provider.hpp"
+#include "temporaryDirectory.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -8,6 +9,194 @@
 #include <vector>
 #include <algorithm>
 #include <fstream>
+
+namespace
+{
+struct InstallFile
+{
+    fs::path source;
+    fs::path destination;
+};
+
+bool isWithin(const fs::path &path, const fs::path &root)
+{
+    const auto match = std::mismatch(root.begin(), root.end(), path.begin(), path.end());
+    return match.first == root.end();
+}
+
+bool availableDestination(const fs::path &destination, bool directory)
+{
+    // Nao atravessa links em diretorios de destino nem substitui arquivos.
+    fs::path current;
+    for (const auto &component : destination)
+    {
+        current /= component;
+        const auto status = fs::symlink_status(current);
+        if (!fs::exists(status))
+            continue;
+        const bool needsDirectory = current != destination || directory;
+        if (!needsDirectory || !fs::is_directory(status))
+        {
+            std::cerr << "Conflito no destino: " << current << '\n';
+            return false;
+        }
+    }
+    return true;
+}
+
+bool executeInstallCommand(const std::string &command)
+{
+    std::cout << "Executando: " << command << std::endl;
+    return std::system(command.c_str()) == 0;
+}
+
+bool publishStage(const fs::path &stagePath)
+{
+    const fs::path stage = fs::canonical(stagePath);
+    const fs::path stagedPrefix = stage / "usr";
+    std::vector<InstallFile> files;
+    std::vector<fs::path> directories;
+
+    for (const auto &entry : fs::recursive_directory_iterator(stage))
+    {
+        // lexically_relative preserva o nome de um link, sem resolve-lo.
+        const fs::path relative = entry.path().lexically_relative(stage);
+        const fs::path destination = fs::path("/") / relative;
+        if (!isWithin(destination, fs::path("/usr")))
+        {
+            std::cerr << "Receita tentou instalar fora de /usr: " << destination << '\n';
+            return false;
+        }
+
+        const auto status = entry.symlink_status();
+        if (fs::is_directory(status))
+        {
+            directories.push_back(destination);
+            continue;
+        }
+        if (fs::is_symlink(status))
+        {
+            const fs::path link = fs::read_symlink(entry.path());
+            fs::path target;
+            if (link.is_absolute())
+            {
+                if (!isWithin(link.lexically_normal(), fs::path("/usr")))
+                {
+                    std::cerr << "Link fora de /usr: " << entry.path() << '\n';
+                    return false;
+                }
+                target = stage / link.relative_path();
+            }
+            else
+                target = entry.path().parent_path() / link;
+
+            const auto resolved = fs::weakly_canonical(target);
+            if (!isWithin(resolved, stagedPrefix) || !fs::is_regular_file(resolved))
+            {
+                std::cerr << "Link nao aponta para um arquivo desta instalacao: " << entry.path()
+                          << '\n';
+                return false;
+            }
+        }
+        else if (!fs::is_regular_file(status))
+        {
+            std::cerr << "Tipo de arquivo nao suportado: " << entry.path() << '\n';
+            return false;
+        }
+        else if ((status.permissions() & (fs::perms::set_uid | fs::perms::set_gid)) !=
+                 fs::perms::none)
+        {
+            std::cerr << "Arquivo com permissoes especiais nao suportadas: " << entry.path()
+                      << '\n';
+            return false;
+        }
+        files.push_back({entry.path(), destination});
+    }
+
+    if (files.empty())
+    {
+        std::cerr << "A receita nao preparou arquivos para instalar.\n";
+        return false;
+    }
+
+    std::sort(directories.begin(), directories.end());
+    std::sort(files.begin(), files.end(),
+              [](const auto &a, const auto &b) { return a.destination < b.destination; });
+
+    // Esta fase inteira termina antes do primeiro comando privilegiado.
+    for (const auto &directory : directories)
+        if (!availableDestination(directory, true))
+            return false;
+    for (const auto &file : files)
+        if (!availableDestination(file.destination, false))
+            return false;
+
+    for (const auto &directory : directories)
+    {
+        if (!availableDestination(directory, true))
+            return false;
+        if (!fs::exists(directory) &&
+            !executeInstallCommand("sudo mkdir -p -- " + quoteShell(directory.string())))
+        {
+            std::cerr << "Falha ao criar diretorios de instalacao.\n";
+            return false;
+        }
+    }
+
+    std::vector<fs::path> installed;
+    for (const auto &file : files)
+    {
+        // GNU cp none-fail recusa sobrescrita, inclusive se surgir um novo
+        // arquivo depois da verificacao inicial. Nao preserva o dono do stage.
+        const std::string command =
+            "sudo cp --no-dereference --preserve=mode --update=none-fail -T -- " +
+            quoteShell(file.source.string()) + " " + quoteShell(file.destination.string());
+        if (!availableDestination(file.destination, false) || !executeInstallCommand(command))
+        {
+            std::cerr << "Instalacao incompleta; verifique o destino: " << file.destination << '\n';
+            for (const auto &previous : installed)
+                std::cerr << "Ja instalado: " << previous << '\n';
+            return false;
+        }
+        installed.push_back(file.destination);
+    }
+    return true;
+}
+
+bool executableSource(const fs::path &root, const fs::path &relative)
+{
+    if (relative.empty() || relative.is_absolute())
+    {
+        std::cerr << "Informe um executavel relativo ao projeto.\n";
+        return false;
+    }
+    const fs::path candidate = root / relative;
+    if (fs::is_symlink(candidate))
+    {
+        std::cerr << "O executavel deve ser um arquivo real.\n";
+        return false;
+    }
+    const fs::path source = fs::canonical(candidate);
+    if (!isWithin(source, root) || !fs::is_regular_file(source))
+    {
+        std::cerr << "Executavel invalido ou fora do projeto: " << relative << '\n';
+        return false;
+    }
+    std::ifstream file(source, std::ios::binary);
+    char header[4]{};
+    file.read(header, sizeof(header));
+    const auto bytes = file.gcount();
+    const bool elf = bytes == 4 && header[0] == '\x7f' && header[1] == 'E' && header[2] == 'L' &&
+                     header[3] == 'F';
+    const bool script = bytes >= 2 && header[0] == '#' && header[1] == '!';
+    if (!elf && !script)
+    {
+        std::cerr << "Formato de executavel nao suportado: " << relative << '\n';
+        return false;
+    }
+    return true;
+}
+} // namespace
 
 std::optional<fs::path> Install::clone(
     const std::string& url,
@@ -122,99 +311,41 @@ std::optional<fs::path> Install::clone(
     return destination;
 }
 
-bool Install::installExecutable(
-    const fs::path& repositoryPath,
-    const fs::path& relativeExecutable) const
+bool Install::installExecutable(const fs::path &repositoryPath,
+                                const fs::path &relativeExecutable) const
 {
-    if (relativeExecutable.empty() ||
-        relativeExecutable.is_absolute())
+    return installExecutables(repositoryPath, {relativeExecutable});
+}
+
+bool Install::installExecutables(const fs::path &repositoryPath,
+                                 const std::vector<fs::path> &relativeExecutables) const
+{
+    if (relativeExecutables.empty())
     {
-        std::cerr << "Informe um caminho relativo ao projeto.\n";
+        std::cerr << "Nenhum executavel informado.\n";
         return false;
     }
-
     const fs::path root = fs::canonical(repositoryPath);
-    const fs::path candidate = root / relativeExecutable;
+    TemporaryDirectory workspace;
+    const fs::path bin = workspace.path() / "usr" / "bin";
+    fs::create_directories(bin);
 
-    if (fs::is_symlink(candidate))
+    for (const auto &relative : relativeExecutables)
     {
-        std::cerr << "Selecione o arquivo real, nao um link simbolico.\n";
-        return false;
+        if (!executableSource(root, relative))
+            return false;
+        const fs::path destination = bin / relative.filename();
+        if (fs::exists(destination))
+        {
+            std::cerr << "Executaveis com nomes repetidos: " << relative.filename() << '\n';
+            return false;
+        }
+        fs::copy_file(root / relative, destination);
+        fs::permissions(destination, fs::perms::owner_all | fs::perms::group_read |
+                                         fs::perms::group_exec | fs::perms::others_read |
+                                         fs::perms::others_exec);
     }
-
-    const fs::path source = fs::canonical(candidate);
-
-    // Compara componentes de caminho, nao prefixos de texto.
-    const auto comparison = std::mismatch(
-        root.begin(), root.end(),
-        source.begin(), source.end());
-
-    if (comparison.first != root.end())
-    {
-        std::cerr << "O arquivo esta fora do diretorio do projeto.\n";
-        return false;
-    }
-
-    if (!fs::is_regular_file(source))
-    {
-        std::cerr << "O caminho nao corresponde a um arquivo regular.\n";
-        return false;
-    }
-
-    // Triagem inicial para binarios ELF e scripts com shebang.
-    std::ifstream file(source, std::ios::binary);
-
-    if (!file)
-    {
-        std::cerr << "Nao foi possivel ler o arquivo selecionado.\n";
-        return false;
-    }
-
-    char header[4]{};
-    file.read(header, sizeof(header));
-    const std::streamsize bytesRead = file.gcount();
-
-    const bool isElf =
-        bytesRead == 4 &&
-        header[0] == '\x7f' &&
-        header[1] == 'E' &&
-        header[2] == 'L' &&
-        header[3] == 'F';
-
-    const bool isScript =
-        bytesRead >= 2 &&
-        header[0] == '#' &&
-        header[1] == '!';
-
-    if (!isElf && !isScript)
-    {
-        std::cerr << "Formato nao aceito: esperado ELF ou script com #!.\n";
-        return false;
-    }
-
-    const fs::path destination =
-        fs::path("/usr/bin") / source.filename();
-
-    if (fs::exists(destination) || fs::is_symlink(destination))
-    {
-        std::cerr << "O destino ja existe: " << destination << '\n';
-        return false;
-    }
-
-    std::cout << "Instalando em: " << destination << '\n';
-
-    const std::string command =
-        "sudo install -m 755 -T -- " +
-        quoteShell(source.string()) + " " +
-        quoteShell(destination.string());
-
-    if (std::system(command.c_str()) != 0)
-    {
-        std::cerr << "Falha ao instalar o executavel.\n";
-        return false;
-    }
-
-    return true;
+    return publishStage(workspace.path());
 }
 
 bool Install::installPackages(
@@ -279,29 +410,30 @@ bool Install::installPackages(
 
     if (std::system(command.c_str()) != 0)
     {
-        std::cerr << "Falha na instalacao dos pacotes.\n";
+        std::cerr << "Falha na instalação dos pacotes.\n";
         return false;
     }
 
     return true;
 }
 
-bool Install::installCMake(const fs::path& buildDirectory) const
+bool Install::installCMake(const fs::path &buildDirectory) const
 {
-    const fs::path directory = fs::absolute(buildDirectory);
-
+    const fs::path directory = fs::canonical(buildDirectory);
     if (!fs::is_regular_file(directory / "cmake_install.cmake"))
     {
-        std::cerr << "Receita de instalação CMake não encontrada.\n";
+        std::cerr << "Receita de instalacao CMake nao encontrada.\n";
         return false;
     }
 
-    const std::string command =
-        "sudo cmake --install " +
-        quoteShell(directory.string()) +
-        " --prefix /usr";
+    TemporaryDirectory workspace;
+    const std::string command = "DESTDIR=" + quoteShell(workspace.path().string()) +
+                                " cmake --install " + quoteShell(directory.string()) +
+                                " --prefix /usr";
 
-    std::cout << "Executando: " << command << '\n';
+    std::cout << "Preparando instalacao: " << command << '\n';
+    if (!runShell(command).success)
+        return false;
 
-    return runShell(command).success;
+    return publishStage(workspace.path());
 }

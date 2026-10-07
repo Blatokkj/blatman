@@ -3,11 +3,13 @@
 #include "builderDetector.hpp"
 #include "operations/build.hpp"
 #include "dependencies.hpp"
+#include "temporaryDirectory.hpp"
 
 #include <iostream>
 #include <filesystem>
 #include <set>
 #include <vector>
+#include <optional>
 
 namespace fs = std::filesystem;
 
@@ -20,60 +22,57 @@ Uso:
   blatman <comando> [opções] [argumentos]
 
 Comandos:
-  install <pacote>       Instala um pacote
-  remove <pacote>        Remove um pacote
-  update                 Atualiza os pacotes
-  update <pacote>        Atualiza um pacote específico
+  install <URL>          Compila e instala um repositorio (CMake/Go)
+  remove <pacote>        Ainda nao implementado
+  update [pacote]        Ainda nao implementado
   build <projeto>        Detecta e executa o sistema de build
   help                   Mostra esta ajuda
 
 Opções:
   -h, --help             Mostra esta ajuda
-  -v, --version          Mostra a versão do Blatman
 
 Exemplos:
-  blatman install firefox
+  blatman install https://github.com/fmtlib/fmt.git
   blatman remove firefox
   blatman update
   blatman build .
 )";
 }
 
-void installCommand(const std::string& argument)
+bool installCommand(const std::string &argument)
 {
     if (argument.empty())
     {
         std::cerr << "Erro: informe a URL do repositório.\n";
-        return;
+        return false;
     }
-    
+
     try
     {
         fs::path cacheRoot = fs::current_path() / "blatman-cache";
 
+        Install installer;
 
-    Install installer;
+        std::cout << "Clonando: " << argument << '\n';
 
-    std::cout << "Clonando: " << argument << '\n';
+        const auto repositoryPath = installer.clone(argument, cacheRoot);
 
-    const auto repositoryPath = installer.clone(argument, cacheRoot);
+        if (!repositoryPath)
+        {
+            std::cerr << "Operação de instalação interrompida.\n";
+            return false;
+        }
 
-    if (!repositoryPath)
-    {
-        std::cerr << "Operação de instalação interrompida.\n";
-        return;
-    }
+        std::cout << "Repositório pronto para compilação.\n";
+        std::cout << "Procurando sistema de build...\n";
 
-    std::cout << "Repositório pronto para compilação.\n";
-    std::cout << "Procurando sistema de build...\n";
+        BuildDetector detector;
+        BuildSystem system = detector.detect(*repositoryPath);
 
-    BuildDetector detector;
-    BuildSystem system = detector.detect(*repositoryPath);
+        const char *name = "";
 
-    const char* name = "";
-
-    switch (system)
-    {
+        switch (system)
+        {
         case BuildSystem::CMake:
             name = "CMake";
             break;
@@ -103,56 +102,61 @@ void installCommand(const std::string& argument)
             break;
         case BuildSystem::Unknown:
             std::cout << "Nenhum sistema de build reconhecido.\n";
-            return;
-    }
-    
+            return false;
+        }
+
         std::cout << "Sistema detectado: " << name << '\n';
 
-    Build builder;
+        fs::path executableDirectory;
+        std::optional<TemporaryDirectory> executableWorkspace;
 
-    // Guarda os conjuntos de requisitos que ja tentamos resolver.
-    std::set<std::vector<std::string>> attemptedDependencies;
-
-    while (true)
-    {
-        const CommandResult result =
-            builder.run(*repositoryPath, system);
-
-        if (result.success)
-            break;
-
-        const std::vector<std::string> missing =
-            findMissingDependencies(result.output);
-
-        if (missing.empty())
+        if (system == BuildSystem::Go)
         {
-            std::cerr
-                << "Build falhou, mas nenhum diagnostico de dependencia "
-                << "suportado foi reconhecido. Confira a saida acima.\n";
-            return;
+            executableWorkspace.emplace(fs::absolute(*repositoryPath));
+            executableDirectory = executableWorkspace->path();
         }
 
-        if (attemptedDependencies.contains(missing))
-        {
-            std::cerr
-                << "Os mesmos requisitos continuam nao localizados "
-                << "após uma tentativa de resolução.\n";
-            return;
-       }
+        Build builder;
 
-        attemptedDependencies.insert(missing);
+        // Guarda os conjuntos de requisitos que ja tentamos resolver.
+        std::set<std::vector<std::string>> attemptedDependencies;
 
-        for (const auto& dependency : missing)
+        while (true)
         {
-            if (!resolveDependency(dependency))
+            const CommandResult result = builder.run(*repositoryPath, system, executableDirectory);
+
+            if (result.success)
+                break;
+
+            const std::vector<std::string> missing = findMissingDependencies(result.output);
+
+            if (missing.empty())
             {
-                std::cerr << "Resolução interrompida.\n";
-                return;
+                std::cerr << "Build falhou, mas nenhum diagnostico de dependencia "
+                          << "suportado foi reconhecido. Confira a saida acima.\n";
+                return false;
             }
-        }
 
-    std::cout << "Tentando compilar novamente...\n";
-}
+            if (attemptedDependencies.contains(missing))
+            {
+                std::cerr << "Os mesmos requisitos continuam nao localizados "
+                          << "após uma tentativa de resolução.\n";
+                return false;
+            }
+
+            attemptedDependencies.insert(missing);
+
+            for (const auto &dependency : missing)
+            {
+                if (!resolveDependency(dependency))
+                {
+                    std::cerr << "Resolução interrompida.\n";
+                    return false;
+                }
+            }
+
+            std::cout << "Tentando compilar novamente...\n";
+        }
 
         std::cout << "Compilação concluida!\n";
         if (system == BuildSystem::CMake)
@@ -160,67 +164,70 @@ void installCommand(const std::string& argument)
             if (!installer.installCMake(*repositoryPath / "build"))
             {
                 std::cerr << "Falha na instalação do projeto.\n";
-                return;
+                return false;
             }
 
             std::cout << "Instalação concluida!\n";
-            return;
+            return true;
         }
-        std::cout << "Diretório do projeto: " << *repositoryPath << '\n';
-        std::cout << "Caminho do executável relativo ao projeto: ";
-
-        std::string executableArgument;
-
-        if (!std::getline(std::cin, executableArgument) ||
-            executableArgument.empty())
-            {
-                std::cerr << "Executável não informado. Instalação interrompida.\n";
-                return;
-            }
-
-            const fs::path relativeExecutable = executableArgument;
-
-            if (relativeExecutable.is_absolute())
-            {
-                std::cerr << "Informe um caminho relativo ao diretório do projeto.\n";
-                return;
-            }
-
-            if (!installer.installExecutable(
-                *repositoryPath, relativeExecutable))
-            {
-                std::cerr << "Instalação interrompida.\n";
-                return;
-            }
-
-            std::cout << "Executável instalado em "
-                << fs::path("/usr/bin") / relativeExecutable.filename()
-                << '\n';
-        }
-
-        catch (const fs::filesystem_error& error)
+        if (system != BuildSystem::Go)
         {
-            std::cerr << "Erro de filesystem durante a instalação: "
-            << error.what() << '\n';
+            std::cerr << "Compilação concluída, mas a instalação automática "
+                      << "deste sistema ainda nao foi implementada.\n";
+            return false;
         }
+
+        std::vector<fs::path> executables;
+
+        for (const auto &entry : fs::directory_iterator(executableDirectory))
+        {
+            if (entry.is_symlink() || !entry.is_regular_file())
+                continue;
+
+            executables.push_back(fs::relative(entry.path(), *repositoryPath));
+        }
+
+        if (executables.empty())
+        {
+            std::cerr << "Nenhum executavel foi gerado nos pacotes selecionados. "
+                      << "Instalação interrompida.\n";
+            return false;
+        }
+
+        if (!installer.installExecutables(*repositoryPath, executables))
+        {
+            std::cerr << "Instalação interrompida.\n";
+            return false;
+        }
+
+        std::cout << "Instalação concluida!\n";
+        return true;
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "Erro durante a instalação: " << error.what() << '\n';
+        return false;
+    }
 }
 
-void removeCommand(const std::string& argument)
+bool removeCommand(const std::string &)
 {
-    std::cout << "Remove ainda nao implementado.\n";
+    std::cerr << "Remove ainda nao implementado.\n";
+    return false;
 }
 
-void updateCommand(const std::string& argument)
+bool updateCommand(const std::string &)
 {
-    std::cout << "Update ainda nao implementado.\n";
+    std::cerr << "Update ainda nao implementado.\n";
+    return false;
 }
 
-void buildCommand(const std::string& argument)
+bool buildCommand(const std::string &argument)
 {
     if (argument.empty())
     {
         std::cerr << "Erro: informe o diretorio do projeto.\n";
-        return;
+        return false;
     }
 
     const fs::path projectPath = argument;
@@ -230,7 +237,7 @@ void buildCommand(const std::string& argument)
         if (!fs::is_directory(projectPath))
         {
             std::cerr << "Erro: informe um diretorio existente.\n";
-            return;
+            return false;
         }
 
         BuildDetector detector;
@@ -240,13 +247,15 @@ void buildCommand(const std::string& argument)
 
         const CommandResult result = builder.run(projectPath, system);
         if (!result.success)
-            return;
+            return false;
 
         std::cout << "Build concluido com sucesso!\n";
+        return true;
     }
-    catch (const fs::filesystem_error& error)
+    catch (const fs::filesystem_error &error)
     {
         std::cerr << "Erro de filesystem: " << error.what() << '\n';
+        return false;
     }
 }
 
@@ -280,34 +289,24 @@ Command parseCommand(const std::string& command)
     return Command::Unknown;
 }
 
-void executeCommand(
-    Command command,
-    const std::string& argument)
+bool executeCommand(Command command, const std::string &argument)
 {
     switch (command)
     {
-        case Command::Help:
-            printHelp();
-            break;
-
-        case Command::Install:
-            installCommand(argument);
-            break;
-
-        case Command::Remove:
-            removeCommand(argument);
-            break;
-
-        case Command::Update:
-            updateCommand(argument);
-            break;
-
-        case Command::Build:
-            buildCommand(argument);
-            break;
-
-        case Command::Unknown:
-            std::cout << "Comando desconhecido.\n";
-            break;
+    case Command::Help:
+        printHelp();
+        return true;
+    case Command::Install:
+        return installCommand(argument);
+    case Command::Remove:
+        return removeCommand(argument);
+    case Command::Update:
+        return updateCommand(argument);
+    case Command::Build:
+        return buildCommand(argument);
+    case Command::Unknown:
+        std::cerr << "Comando desconhecido.\n";
+        return false;
     }
+    return false;
 }

@@ -8,7 +8,8 @@
 
 CommandResult Build::run(
     const fs::path& projectPath,
-    BuildSystem system) const
+    BuildSystem system,
+    const fs::path& executableDirectory) const
 {
     const fs::path sourcePath = fs::absolute(projectPath);
 
@@ -74,10 +75,26 @@ CommandResult Build::run(
             break;
 
         case BuildSystem::Go:
+        {
+            const fs::path destination = executableDirectory.empty()
+                ? sourcePath / "build" / "blatman-bin"
+                : fs::absolute(executableDirectory);
+
+            fs::create_directories(destination);
+
+            const std::string packages =
+                fs::is_directory(sourcePath / "cmd")
+                    ? "./cmd/..."
+                    : ".";
+
             commands = {
-                "go build ./..."
+                "go build -o " +
+                quoteShell(destination.string() + "/") +
+                " " + packages
             };
+
             break;
+        }
 
         case BuildSystem::Unknown:
             std::cerr << "Nenhum sistema de build reconhecido.\n";
