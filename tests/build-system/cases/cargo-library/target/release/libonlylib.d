@@ -1,1 +1,0 @@
-/home/blato/blatman/.blatman-review/proposed/tests/build-system/cases/cargo-library/target/release/libonlylib.rlib: /home/blato/blatman/.blatman-review/proposed/tests/build-system/cases/cargo-library/src/lib.rs
