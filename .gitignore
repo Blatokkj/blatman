@@ -1,0 +1,14 @@
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+__pycache__/
+*.pyc
+**/target/
+**/go-cache/
+
+*.o
+*.so
+*.a
