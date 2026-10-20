@@ -19,7 +19,7 @@ std::string quoteShell(const std::string& value)
     return result;
 }
 
-CommandResult runShell(const std::string& command, bool echo)
+CommandResult runShell(const std::string& command, bool echo, std::size_t captureLimit)
 {
     // Padroniza o idioma dos diagnosticos e captura stdout + stderr.
     const std::string wrappedCommand =
@@ -40,7 +40,16 @@ CommandResult runShell(const std::string& command, bool echo)
 
     while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr)
     {
-        output += buffer;
+        // Only bound Java build logs (other callers pass captureLimit=0).
+        const std::size_t size = std::char_traits<char>::length(buffer);
+        if (captureLimit != 0 && size >= captureLimit)
+            output.assign(buffer + size - captureLimit, captureLimit);
+        else
+        {
+            if (captureLimit != 0 && output.size() + size > captureLimit)
+                output.erase(0, output.size() + size - captureLimit);
+            output.append(buffer, size);
+        }
         if (echo) std::cout << buffer << std::flush;
     }
 

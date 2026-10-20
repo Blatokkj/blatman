@@ -3,6 +3,8 @@
 #include "temporaryDirectory.hpp"
 
 #include <algorithm>
+#include <charconv>
+#include <stdexcept>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -123,11 +125,53 @@ std::optional<Java> selectJava(const fs::path& project, BuildSystem system)
     return std::nullopt;
 }
 
-std::string prefix(const Java& java)
+// BLATMAN_JAVA_HEAP_MB=512 by default; allow bigger projects to opt in.
+int javaHeapMiB()
+{
+    int value = 512;
+    if (const char* raw = std::getenv("BLATMAN_JAVA_HEAP_MB"); raw && *raw) {
+        const std::string input(raw);
+        const auto parsed = std::from_chars(input.data(), input.data() + input.size(), value);
+        if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() ||
+            value < 256 || value > 32768)
+            throw std::runtime_error("BLATMAN_JAVA_HEAP_MB must be an integer from 256 to 32768");
+    }
+    return value;
+}
+
+std::string javaMemoryOptions()
+{
+    return "-Xms64m -Xmx" + std::to_string(javaHeapMiB()) +
+           "m -XX:MaxMetaspaceSize=384m -XX:+UseSerialGC";
+}
+
+int javaWorkers()
+{
+    int value = 1;
+    if (const char* raw = std::getenv("BLATMAN_JAVA_WORKERS"); raw && *raw) {
+        const std::string input(raw);
+        const auto parsed = std::from_chars(input.data(), input.data() + input.size(), value);
+        if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() ||
+            value < 1 || value > 32)
+            throw std::runtime_error("BLATMAN_JAVA_WORKERS must be an integer from 1 to 32");
+    }
+    return value;
+}
+
+std::string prefix(const Java& java, BuildSystem system)
 {
     const char* path = std::getenv("PATH");
-    return "env JAVA_HOME=" + quoteShell(java.home.string()) + " PATH=" +
-           quoteShell((java.home / "bin").string() + ":" + (path ? path : "/usr/bin:/bin")) + " ";
+    std::string result = "env JAVA_HOME=" + quoteShell(java.home.string()) + " PATH=" +
+           quoteShell((java.home / "bin").string() + ":" + (path ? path : "/usr/bin:/bin"));
+    if (system == BuildSystem::Maven) {
+        // Maven uses MAVEN_OPTS to control the JVM. Keep existing user flags.
+        const char* inherited = std::getenv("MAVEN_OPTS");
+        std::string options = inherited ? inherited : "";
+        if (!options.empty()) options += ' ';
+        options += javaMemoryOptions();
+        result += " MAVEN_OPTS=" + quoteShell(options);
+    }
+    return result + " ";
 }
 
 std::string executable(const fs::path& project, BuildSystem system)
@@ -139,7 +183,11 @@ std::string executable(const fs::path& project, BuildSystem system)
 
 std::string gradleOptions(const Java& java)
 {
-    return " --no-daemon --console=plain -Porg.gradle.java.installations.auto-download=false " +
+    return " --no-daemon --console=plain --no-parallel --max-workers=" +
+           std::to_string(javaWorkers()) +
+           " -Pkotlin.compiler.execution.strategy=in-process " +
+           " -Porg.gradle.java.installations.auto-download=false " +
+           quoteShell("-Dorg.gradle.jvmargs=" + javaMemoryOptions()) + " " +
            quoteShell("-Dorg.gradle.java.home=" + java.home.string());
 }
 
@@ -262,7 +310,7 @@ std::optional<std::string> javaBuildCommand(const fs::path& project, BuildSystem
     try {
         const auto java = selectJava(project, system);
         if (!java) return std::nullopt;
-        return prefix(*java) + executable(project, system) +
+        return prefix(*java, system) + executable(project, system) +
                (system == BuildSystem::Gradle ? gradleOptions(*java) + " build" : " --batch-mode package");
     } catch (const std::exception& error) {
         std::cerr << "Cannot prepare Java build: " << error.what() << '\n';
@@ -281,7 +329,7 @@ bool prepareJava(const fs::path& project, BuildSystem system, const fs::path& st
         const auto java = selectJava(project, system);
         if (!java) return false;
         TemporaryDirectory scratch;
-        std::string command = "cd " + quoteShell(fs::absolute(project).string()) + " && " + prefix(*java) + executable(project, system);
+        std::string command = "cd " + quoteShell(fs::absolute(project).string()) + " && " + prefix(*java, system) + executable(project, system);
         if (system == BuildSystem::Gradle) {
             const auto script = scratch.path() / "stage.init.gradle";
             std::ofstream output(script);
@@ -298,7 +346,7 @@ bool prepareJava(const fs::path& project, BuildSystem system, const fs::path& st
                        " " + quoteShell("-DaltSnapshotDeploymentRepository=" + uri) +
                        " -DdeployAtEnd=true package org.apache.maven.plugins:maven-deploy-plugin:3.1.4:deploy";
         }
-        const auto result = runShell(command);
+        const auto result = runShell(command, true, 256 * 1024);
         if (!result.success) return false;
         if (fs::is_empty(stage)) { std::cerr << "Java staging produced no installable artifacts.\n"; return false; }
         return true;

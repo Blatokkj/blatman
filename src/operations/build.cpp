@@ -297,7 +297,9 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
         for (const auto& command : commands)
         {
             std::cout << "Executando: " << command << '\n';
-            const auto executed = runShell("cd " + quoteShell(source.string()) + " && " + command);
+            const auto executed = runShell("cd " + quoteShell(source.string()) + " && " + command,
+                true, (system == BuildSystem::Gradle || system == BuildSystem::Maven)
+                    ? 256 * 1024 : 0);
             result.output += executed.output;
             if (!executed.success) return fail("Falha ao executar: " + command, result.output);
         }
