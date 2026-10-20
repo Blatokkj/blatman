@@ -1,0 +1,12 @@
+gradle-wrapper-stale-pom: Gradle
+maven-wrapper-stale-gradle: Maven
+java-ambiguous: Unknown
+Mais de um sistema de build foi encontrado: Maven Gradle. Selecione um usando BLATMAN_BUILD_SYSTEM.
+mixed-ambiguous: Unknown
+Mais de um sistema de build foi encontrado: CMake Cargo. Selecione um usando BLATMAN_BUILD_SYSTEM.
+mixed-override: Cargo
+bad-override: Unknown
+BLATMAN_BUILD_SYSTEM nao corresponde a um manifesto presente: cmake
+native-generated-make: CMake
+make-override: Make
+pure-make: Make

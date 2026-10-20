@@ -19,7 +19,7 @@ std::string quoteShell(const std::string& value)
     return result;
 }
 
-CommandResult runShell(const std::string& command)
+CommandResult runShell(const std::string& command, bool echo)
 {
     // Padroniza o idioma dos diagnosticos e captura stdout + stderr.
     const std::string wrappedCommand =
@@ -41,7 +41,7 @@ CommandResult runShell(const std::string& command)
     while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr)
     {
         output += buffer;
-        std::cout << buffer << std::flush;
+        if (echo) std::cout << buffer << std::flush;
     }
 
     const bool readFailed = std::ferror(pipe) != 0;

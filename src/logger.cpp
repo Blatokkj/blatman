@@ -60,7 +60,8 @@ std::string Logger::getCurrentTimestamp() const
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
 
-    std::tm tm = *std::localtime(&time);
+    std::tm tm{};
+    if (::localtime_r(&time, &tm) == nullptr) throw std::runtime_error("Falha ao converter horario.");
 
     std::ostringstream oss;
     oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");

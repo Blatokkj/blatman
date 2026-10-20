@@ -6,65 +6,56 @@
 #include <set>
 #include <sstream>
 
-std::vector<std::string> findMissingDependencies(
-    const std::string& output)
+std::vector<std::string> findMissingDependencies(const std::string &output)
 {
-    const std::vector<std::regex> patterns = {
+    static const std::vector<std::regex> patterns = {
+        std::regex(R"rx(blatman:missing-tool:([^ \r\n]+))rx"),
+        std::regex(R"rx((?:^|\n)[^\n]*?: ([A-Za-z0-9_+.-]+): (?:command )?not found)rx"),
+        std::regex(R"rx(fatal error: ([^:\r\n]+): No such file or directory)rx"),
+        std::regex(R"rx(cannot find -l([^ :\r\n]+))rx"),
         // pkg-config/pkgconf.
-        std::regex(
-            R"rx(Package '([^']+)'(?:, required by '[^']*',)? not found)rx"
-        ),
+        std::regex(R"rx(Package '([^']+)'(?:, required by '[^']*',)? not found)rx"),
 
-        std::regex(
-            R"rx(Package ([^ \r\n]+) was not found in the pkg-config search path\.)rx"
-        ),
+        std::regex(R"rx(Package ([^ \r\n]+) was not found in the pkg-config search path\.)rx"),
 
         // CMake: arquivo de configuracao de um pacote nao encontrado.
         std::regex(
-            R"rx(Could not find a package configuration file provided by[ \t\r\n]+"([^"]+)")rx"
-        )
-    };
+            R"rx(Could not find a package configuration file provided by[ \t\r\n]+"([^"]+)")rx")};
 
     std::set<std::string> dependencies;
 
-    for (const auto& pattern : patterns)
+    for (const auto &pattern : patterns)
     {
         const std::sregex_iterator end;
 
-        for (std::sregex_iterator match(
-                 output.begin(), output.end(), pattern);
-             match != end;
+        for (std::sregex_iterator match(output.begin(), output.end(), pattern); match != end;
              ++match)
         {
             dependencies.insert((*match)[1].str());
         }
     }
 
-    return std::vector<std::string>(
-        dependencies.begin(), dependencies.end());
+    return std::vector<std::string>(dependencies.begin(), dependencies.end());
 }
 
-bool resolveDependency(const std::string& dependency)
+bool resolveDependency(const std::string &dependency,
+                       const std::function<bool(const std::string &)> &installUrl)
 {
-    std::cout
-        << "O diagnostico menciona um requisito nao localizado: "
-        << dependency << '\n'
-        << "Isso pode ser opcional ou um problema no caminho de busca.\n";
+    std::cout << "O diagnostico menciona um requisito nao localizado: " << dependency << '\n'
+              << "Isso pode ser opcional ou um problema no caminho de busca.\n";
 
     std::string answer;
 
     // Primeira pergunta: deseja tentar resolver esse requisito?
     while (true)
     {
-        std::cout
-            << "Deseja tentar resolve-lo instalando uma dependencia? "
-            << "[Y/N]: ";
+        std::cout << "Deseja tentar resolve-lo instalando uma dependencia? "
+                  << "[Y/N]: ";
 
         if (!std::getline(std::cin, answer))
             return false;
 
-        if (answer == "Y" || answer == "y" ||
-            answer == "S" || answer == "s")
+        if (answer == "Y" || answer == "y" || answer == "S" || answer == "s")
         {
             break;
         }
@@ -78,25 +69,42 @@ bool resolveDependency(const std::string& dependency)
     // Segunda pergunta: existe um pacote nos repositorios?
     while (true)
     {
-        std::cout
-            << "Existe um pacote nos repositorios oficiais "
-            << "que forneca esse requisito? [Y/N]: ";
+        std::cout << "Existe um pacote nos repositorios oficiais "
+                  << "que forneca esse requisito? [Y/N]: ";
 
         if (!std::getline(std::cin, answer))
             return false;
 
-        if (answer == "Y" || answer == "y" ||
-            answer == "S" || answer == "s")
+        if (answer == "Y" || answer == "y" || answer == "S" || answer == "s")
         {
             break;
         }
 
         if (answer == "N" || answer == "n")
         {
-            std::cerr
-                << "A instalacao completa de dependencias por URL "
-                << "ainda nao esta implementada.\n";
-            return false;
+            if (!installUrl)
+                return false;
+            std::cout << "Informe as URLs HTTPS separadas por espacos: ";
+            std::string line, url;
+            if (!std::getline(std::cin, line))
+                return false;
+            std::istringstream input(line);
+            std::vector<std::string> urls;
+            while (input >> url)
+            {
+                if (!url.starts_with("https://"))
+                {
+                    std::cerr << "URL invalida.\n";
+                    return false;
+                }
+                urls.push_back(url);
+            }
+            if (urls.empty())
+                return false;
+            for (const auto &item : urls)
+                if (!installUrl(item))
+                    return false;
+            return true;
         }
 
         std::cout << "Responda Y ou N.\n";

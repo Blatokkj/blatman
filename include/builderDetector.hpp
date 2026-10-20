@@ -1,23 +1,18 @@
 #pragma once
+
 #include <filesystem>
-#include <string>
 
 namespace fs = std::filesystem;
 
-enum class BuildSystem {
-    CMake,
-    Make,
-    Meson,
-    Cargo,
-    Npm,
-    Maven,
-    Gradle,
-    Autotools,
-    Go,
-    Unknown
+enum class BuildSystem
+{
+    CMake, Make, Meson, Cargo, Npm, Maven, Gradle, Autotools, Go, Unknown
 };
 
-class BuildDetector {
+const char* buildSystemName(BuildSystem system);
+
+class BuildDetector
+{
 public:
-    BuildSystem detect(const fs::path& repoPath) const;
+    BuildSystem detect(const fs::path& repoPath, bool useOverride = true) const;
 };

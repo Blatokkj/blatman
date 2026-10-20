@@ -1,17 +1,24 @@
 #pragma once
 
 #include "builderDetector.hpp"
-#include "shell.hpp"
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
-namespace fs = std::filesystem;
+struct BuildResult
+{
+    bool success;
+    std::string output;
+    // Caminhos dos artefatos declarados pelo sistema de build desta execucao.
+    std::vector<std::filesystem::path> executables;
+};
 
 class Build
 {
 public:
-    CommandResult run(
-        const fs::path& projectPath,
-        BuildSystem system,
-        const fs::path& executableDirectory = {}) const;
+    bool execute(const std::string& argument) const;
+    BuildResult run(const std::filesystem::path& projectPath,
+                    BuildSystem system,
+                    const std::filesystem::path& executableDirectory = {}) const;
 };

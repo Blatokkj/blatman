@@ -10,4 +10,4 @@ struct CommandResult
     std::string output;
 };
 
-CommandResult runShell(const std::string& command);
+CommandResult runShell(const std::string& command, bool echo = true);
