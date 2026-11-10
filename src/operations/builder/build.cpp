@@ -1,7 +1,8 @@
-#include "operations/build.hpp"
-#include "javaSupport.hpp"
-#include "projectWorkflow.hpp"
+#include "operations/builder/build.hpp"
+#include "operations/builder/javaSupport.hpp"
+#include "operations/builder/projectWorkflow.hpp"
 #include "shell.hpp"
+#include "operations/installation/base/baseInstall.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -98,7 +99,7 @@ BuildResult cargoBuild(const fs::path& source, const fs::path& destination)
                 fs::weakly_canonical(source / "Cargo.toml"))
                 members.insert(package.at("id").get<std::string>());
         if (members.empty())
-            return fail("Cargo nao informou workspace_default_members; atualize Cargo para selecionar os binarios com seguranca.");
+            return fail("Cargo não informou workspace_default_members; atualize Cargo para selecionar os binarios com seguranca.");
     }
     std::map<std::string, std::string> targets;
     std::set<std::string> requiredTargets;
@@ -137,14 +138,14 @@ BuildResult cargoBuild(const fs::path& source, const fs::path& destination)
             item.at("profile").value("test", false)) continue;
         const fs::path artifact(item.at("executable").get<std::string>());
         if (!artifact.is_absolute() || !fs::is_regular_file(artifact))
-            return fail("Cargo informou um executavel ausente ou nao absoluto: " + artifact.string(), built.output);
+            return fail("Cargo informou um executável ausente ou não absoluto: " + artifact.string(), built.output);
         artifacts[name] = artifact;
     }
     if (artifacts.empty() && !targets.empty())
-        return fail("Cargo nao produziu executaveis para os membros selecionados.", built.output);
+        return fail("Cargo nao produziu executáveis para os membros selecionados.", built.output);
     for (const auto& name : requiredTargets)
         if (!artifacts.contains(name))
-            return fail("Cargo nao informou o executavel obrigatorio: " + name, built.output);
+            return fail("Cargo nao informou o executável obrigatório: " + name, built.output);
     fs::create_directories(destination);
     std::vector<fs::path> executables;
     for (const auto& [name, artifact] : artifacts)
@@ -176,7 +177,7 @@ BuildResult goBuild(const fs::path& source, const fs::path& destination)
         std::string word;
         while (words >> word)
         {
-            if (word.starts_with('-')) return fail("BLATMAN_GO_PACKAGES deve conter caminhos de pacotes, sem opcoes.");
+            if (word.starts_with('-')) return fail("BLATMAN_GO_PACKAGES deve conter caminhos de pacotes, sem opções.");
             patterns.push_back(word);
         }
     }
@@ -217,7 +218,7 @@ BuildResult goBuild(const fs::path& source, const fs::path& destination)
         if (name.size() > 1 && name[0] == 'v' &&
             name.find_first_not_of("0123456789", 1) == std::string::npos)
             name = fs::path(import).parent_path().filename().string();
-        if (!safeName(name)) return fail("Nome de executavel Go invalido: " + name);
+        if (!safeName(name)) return fail("Nome de executável Go invalido: " + name);
         const auto [entry, inserted] = packages.emplace(name, import);
         if (!inserted && entry->second != import)
             return fail("Pacotes Go produzem o mesmo nome: " + name +
@@ -266,13 +267,13 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
         switch (system)
         {
             case BuildSystem::CMake:
-                commands = {"cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_BINDIR=bin -DCMAKE_INSTALL_LIBDIR=lib", "cmake --build build"};
+                commands = {"cmake -S . -B build " "-DCMAKE_INSTALL_PREFIX=" + Blatman::Install::PREFIX.string() + " -DCMAKE_INSTALL_BINDIR=bin -DCMAKE_INSTALL_LIBDIR=lib", "cmake --build build"};
                 break;
             case BuildSystem::Make: commands = {"make"}; break;
             case BuildSystem::Meson:
                 commands = {std::string("meson setup ") +
                     (fs::is_regular_file(source / "build" / "meson-private" / "coredata.dat") ? "--reconfigure " : "") +
-                    "build --prefix=/usr --bindir=bin --libdir=lib", "meson compile -C build"};
+                    "build --prefix=" + Blatman::Install::PREFIX.string() + " --bindir=bin --libdir=lib", "meson compile -C build"};
                 break;
             case BuildSystem::Npm:
                 commands = {fs::is_regular_file(source / "package-lock.json") || fs::is_regular_file(source / "npm-shrinkwrap.json")
@@ -282,13 +283,13 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
             case BuildSystem::Gradle:
             {
                 const auto command = javaBuildCommand(source, system);
-                if (!command) return fail("Nao foi possivel preparar o build Java.");
+                if (!command) return fail("Não foi possivel preparar o build Java.");
                 commands.push_back(*command);
                 break;
             }
             case BuildSystem::Autotools:
                 if (!fs::is_regular_file(source / "configure")) commands.emplace_back("autoreconf -fi");
-                commands.emplace_back("sh ./configure --prefix=/usr --bindir=/usr/bin --libdir=/usr/lib");
+                commands.emplace_back("sh ./configure --prefix=" + Blatman::Install::PREFIX.string() + " --bindir=bin --libdir=lib");
                 commands.emplace_back("make");
                 break;
             default: return fail("Nenhum sistema de build reconhecido.");

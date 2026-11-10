@@ -1,6 +1,6 @@
-#include "javaSupport.hpp"
+#include "operations/builder/javaSupport.hpp"
 #include "shell.hpp"
-#include "temporaryDirectory.hpp"
+#include "operations/installation/temporaryDirectory.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -202,7 +202,7 @@ import org.gradle.api.tasks.Sync
 def stagePath = System.getProperty('blatman.stage')
 if (!stagePath) throw new GradleException('Missing blatman.stage')
 def stage = new File(stagePath).canonicalFile
-def repository = new File(stage, 'usr/share/maven-repo')
+def repository = new File(stage, 'blatman/share/maven-repo')
 def repoUri = repository.toURI()
 def selected = []
 def coordinates = [:]
@@ -253,11 +253,11 @@ gradle.projectsEvaluated {
                 throw new GradleException("Unsafe application name: ${name}")
             if (apps.containsKey(name)) throw new GradleException("Duplicate application name: ${name}")
             apps[name] = p.path
-            def destination = new File(stage, "usr/lib/blatman/${name}")
+            def destination = new File(stage, "blatman/lib/blatman/${name}")
             def install = p.tasks.named('installDist', Sync).get()
             install.into(destination)
             install.doLast {
-                def bin = new File(stage, 'usr/bin')
+                def bin = new File(stage, 'blatman/bin')
                 bin.mkdirs()
                 def scripts = new File(destination, 'bin').listFiles()?.findAll { it.isFile() && !it.name.endsWith('.bat') } ?: []
                 if (scripts.empty) throw new GradleException("No launchers in application distribution: ${name}")
@@ -266,7 +266,7 @@ gradle.projectsEvaluated {
                         throw new GradleException("Unsafe launcher name: ${script.name}")
                     def launcher = new File(bin, script.name)
                     if (launcher.exists()) throw new GradleException("Duplicate launcher: ${script.name}")
-                    launcher.text = '#!/bin/sh\nexec /usr/lib/blatman/' + name + '/bin/' + script.name + ' "$@"\n'
+                    launcher.text = '#!/bin/sh\nexec /blatman/lib/blatman/' + name + '/bin/' + script.name + ' "$@"\n'
                     if (!launcher.setExecutable(true, false)) throw new GradleException("Cannot make launcher executable: ${launcher}")
                 }
             }
@@ -339,7 +339,7 @@ bool prepareJava(const fs::path& project, BuildSystem system, const fs::path& st
             command += gradleOptions(*java) + " --init-script " + quoteShell(script.string()) +
                        " " + quoteShell("-Dblatman.stage=" + fs::canonical(stage).string()) + " blatmanStageInstall";
         } else {
-            const auto uri = "blatman-stage::" + fileUri(fs::canonical(stage) / "usr/share/maven-repo");
+            const auto uri = "blatman-stage::" + fileUri(fs::canonical(stage) / "blatman/share/maven-repo");
             command += " --batch-mode " + quoteShell("-Dmaven.repo.local=" + (scratch.path() / "dependency-cache").string()) +
                        " " + quoteShell("-DaltDeploymentRepository=" + uri) +
                        " " + quoteShell("-DaltReleaseDeploymentRepository=" + uri) +

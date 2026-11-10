@@ -1,5 +1,5 @@
-#include "dependencies.hpp"
-#include "operations/install.hpp"
+#include "operations/installation/dependencies.hpp"
+#include "operations/installation/install.hpp"
 
 #include <iostream>
 #include <regex>

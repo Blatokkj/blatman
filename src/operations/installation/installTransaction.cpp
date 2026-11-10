@@ -1,4 +1,4 @@
-#include "installTransaction.hpp"
+#include "operations/installation/installTransaction.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -51,7 +51,7 @@ struct Created
 };
 bool withinUsr(const fs::path &p)
 {
-    return !p.is_absolute() && !p.empty() && *p.begin() == "usr" &&
+    return !p.is_absolute() && !p.empty() && *p.begin() == "blatman" &&
            std::none_of(p.begin(), p.end(), [](const auto &c) { return c == ".."; });
 }
 int openDirectory(int root, const fs::path &path)
@@ -107,7 +107,7 @@ void validateLink(const Entry &original, const std::map<fs::path, Entry> &entrie
                 if (pending.filename().empty())
                     pending = pending.parent_path();
                 if (!withinUsr(pending))
-                    throw std::runtime_error("Link fora de /usr: " + original.relative.string());
+                    throw std::runtime_error("Link fora de /blatman: " + original.relative.string());
                 redirected = true;
                 break;
             }
@@ -192,7 +192,7 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
             const auto status = item.symlink_status();
             const auto type = status.type();
             if (!withinUsr(relative))
-                throw std::runtime_error("Receita tentou instalar fora de /usr: " +
+                throw std::runtime_error("Receita tentou instalar fora de /blatman: " +
                                          relative.string());
             if (type != fs::file_type::directory && type != fs::file_type::regular &&
                 type != fs::file_type::symlink)

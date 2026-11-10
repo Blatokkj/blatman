@@ -1,11 +1,13 @@
-#include "projectWorkflow.hpp"
-#include "operations/build.hpp"
-#include "operations/install.hpp"
-#include "builderDetector.hpp"
-#include "dependencies.hpp"
-#include "nativeInstall.hpp"
-#include "javaSupport.hpp"
-#include "temporaryDirectory.hpp"
+#include "operations/builder/projectWorkflow.hpp"
+#include "operations/builder/build.hpp"
+#include "operations/installation/install.hpp"
+#include "operations/builder/builderDetector.hpp"
+#include "operations/installation/dependencies.hpp"
+#include "operations/installation/nativeInstall.hpp"
+#include "operations/builder/javaSupport.hpp"
+#include "operations/installation/temporaryDirectory.hpp"
+#include "operations/installation/base/baseInstall.hpp"
+#include "pathSetup.hpp"
 #include "shell.hpp"
 #include <filesystem>
 #include <iostream>
@@ -27,7 +29,7 @@ class CacheLock
         : fd_(::open(name.c_str(), O_CREAT | O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600))
     {
         if (fd_ < 0)
-            throw std::runtime_error("Nao foi possivel abrir trava do cache.");
+            throw std::runtime_error("Não foi possivel abrir trava do cache.");
         struct stat s{};
         if (::fstat(fd_, &s) != 0 || !S_ISREG(s.st_mode) || ::flock(fd_, LOCK_EX | LOCK_NB) != 0)
         {
@@ -167,7 +169,7 @@ bool installProject(const std::string &argument, const Install &installer)
                                        { return installProject(url, installer); }))
                     return false;
         }
-        std::cout << "Compilacao concluida!\n";
+        std::cout << "Compilação concluída!\n";
         const auto stage = workspace.path() / "stage";
         fs::create_directory(stage);
         bool prepared = false;
@@ -199,12 +201,23 @@ bool installProject(const std::string &argument, const Install &installer)
         }
         if (!prepared || !installer.publish(stage))
             return false;
-        std::cout << "Instalacao concluida em " << installer.destinationRoot() / "usr" << "!\n";
+
+        if (installer.destinationRoot() == "/" &&
+            !Blatman::Install::setupPath()) {
+            std::cerr
+            << "Aviso: não foi possivel configurar o PATH automaticamente. "
+            << "Adicione /blatman/bin manualmente.\n";
+        }
+
+        // configura o PATH somente na raiz real do sistema.
+        std::cout << "Instalacao concluida em "
+                  << Blatman::Install::PREFIX.string() << "!\n";
+
         return true;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Erro durante instalacao: " << e.what() << '\n';
+        std::cerr << "Erro durante instalação: " << e.what() << '\n';
         return false;
     }
 }

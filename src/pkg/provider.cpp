@@ -1,4 +1,4 @@
-#include "provider.hpp"
+#include "pkg/provider.hpp"
 
 packageManagerInfo getPackageManagerInfo(packageManager manager) 
 { // se detectar um gerenciador de pacotes, usa ele pra instalar, remover ou atualizar algo do repositório.   

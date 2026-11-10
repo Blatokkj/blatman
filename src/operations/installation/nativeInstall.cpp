@@ -1,6 +1,6 @@
-#include "nativeInstall.hpp"
+#include "operations/installation/nativeInstall.hpp"
 #include "shell.hpp"
-#include "temporaryDirectory.hpp"
+#include "operations/installation/temporaryDirectory.hpp"
 
 #include <nlohmann/json.hpp>
 #include <array>
@@ -149,7 +149,7 @@ void copyDocumentation(const fs::path& source, const std::string& name, const fs
             for (const auto& base : locations) {
                 for (const auto& candidate : {base / filename, base / ("man" + std::to_string(section)) / filename}) {
                     if (fs::is_regular_file(fs::symlink_status(candidate)) && copied.insert(filename).second)
-                        copyRegular(candidate, stage / "usr/share/man" / ("man" + std::to_string(section)) / filename, documentMode);
+                        copyRegular(candidate, stage / "blatman/share/man" / ("man" + std::to_string(section)) / filename, documentMode);
                 }
             }
         }
@@ -161,7 +161,7 @@ void copyDocumentation(const fs::path& source, const std::string& name, const fs
     for (const auto& filename : filenames)
         for (const auto& base : locations)
             if (fs::is_regular_file(fs::symlink_status(base / filename)) && copied.insert(filename).second)
-                copyRegular(base / filename, stage / "usr/share/doc" / name / filename, documentMode);
+                copyRegular(base / filename, stage / "blatman/share/doc" / name / filename, documentMode);
 }
 
 struct MakeGraph {
@@ -325,7 +325,7 @@ bool copyExecutables(const std::vector<fs::path>& paths, const fs::path& stage, 
         if (!path.is_absolute() || !elfExecutable(path) || !names.insert(path.filename().string()).second)
             return fail("os executaveis devem ser arquivos ELF absolutos com nomes distintos.");
     for (const auto& path : paths) {
-        copyRegular(path, stage / "usr/bin" / path.filename(), executableMode);
+        copyRegular(path, stage / "blatman/bin" / path.filename(), executableMode);
         if (docs) copyDocumentation(path.parent_path(), path.filename().string(), stage);
     }
     return populated(stage);
@@ -338,7 +338,7 @@ bool prepareCMake(const fs::path& buildDir, const fs::path& stage)
         if (!validStage(stage)) return false;
         const auto build = directory(buildDir);
         return runShell("env DESTDIR=" + quoteShell(stage.string()) + " cmake --install " +
-                        quoteShell(build.string()) + " --prefix /usr").success && populated(stage);
+                        quoteShell(build.string()) + " --prefix /blatman").success && populated(stage);
     } catch (const std::exception& error) { return fail(error.what()); }
 }
 
@@ -364,7 +364,7 @@ bool prepareMake(const fs::path& sourceDir, const fs::path& stage)
         const auto graph = parseMake(metadata.output);
         if (graph.targets.contains("install"))
             return runShell(cd + "make --no-print-directory install DESTDIR=" + quoteShell(stage.string()) +
-                            " prefix=/usr PREFIX=/usr").success && populated(stage);
+                            " prefix=/blatman PREFIX=/blatman").success && populated(stage);
         const auto paths = makeExecutables(graph, source);
         if (paths.size() != 1)
             return fail("sem alvo install: o grafo do alvo padrao deve conter exatamente um executavel ELF; encontrados " +

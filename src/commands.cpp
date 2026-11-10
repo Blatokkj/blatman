@@ -1,6 +1,6 @@
 #include "commands.hpp"
-#include "operations/install.hpp"
-#include "operations/build.hpp"
+#include "operations/installation/install.hpp"
+#include "operations/builder/build.hpp"
 #include "operations/help.hpp"
 #include "operations/remove.hpp"
 #include "operations/update.hpp"

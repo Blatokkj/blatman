@@ -9,7 +9,7 @@ Uso: blatman <comando> <argumento>
  help                Mostra esta ajuda.
  remove / update     Ainda nao implementados.
 Sistemas: CMake, Make, Meson, Cargo, npm, Maven, Gradle, Autotools e Go.
-Executaveis: /usr/bin. Bibliotecas, headers e dados preservam seus destinos.
+Executaveis: /blatman/bin. Bibliotecas, headers e dados preservam seus destinos.
 BLATMAN_DESTDIR=/caminho instala nessa raiz alternativa, sem sudo.
 BLATMAN_BUILD_SYSTEM=cmake|make|meson|cargo|npm|maven|gradle|autotools|go
 seleciona um sistema presente no projeto.

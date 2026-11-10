@@ -32,7 +32,7 @@ option(BUILD_TESTING "Compilar testes de regressao" OFF)
 include(CTest)
 if(BUILD_TESTING)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    add_executable(blatman-publication-test tests/publication_driver.cpp src/installTransaction.cpp)
+    add_executable(blatman-publication-test tests/publication_driver.cpp src/operations/installation/installTransaction.cpp)
     target_include_directories(blatman-publication-test PRIVATE include)
     add_test(NAME regression COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/regression.py $<TARGET_FILE:blatman>

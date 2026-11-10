@@ -23,7 +23,7 @@ CommandResult runShell(const std::string& command, bool echo, std::size_t captur
 {
     // Padroniza o idioma dos diagnosticos e captura stdout + stderr.
     const std::string wrappedCommand =
-        "(export LC_ALL=C; " + command + ") 2>&1";
+        "(export LC_ALL=C.UTF-8; " + command + ") 2>&1";
 
     std::cout.flush();
 

@@ -1,9 +1,10 @@
-#include "operations/install.hpp"
+#include "operations/installation/install.hpp"
 #include "shell.hpp"
-#include "provider.hpp"
-#include "temporaryDirectory.hpp"
-#include "projectWorkflow.hpp"
-#include "installTransaction.hpp"
+#include "pkg/provider.hpp"
+#include "operations/installation/temporaryDirectory.hpp"
+#include "operations/builder/projectWorkflow.hpp"
+#include "operations/installation/installTransaction.hpp"
+#include "pathSetup.hpp"
 
 #include <cstdlib>
 #include <iostream>
