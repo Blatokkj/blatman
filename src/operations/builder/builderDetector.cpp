@@ -72,7 +72,6 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) co
         if (const char* override = std::getenv("BLATMAN_BUILD_SYSTEM"); override && *override)
         {
             const std::string wanted = normalizeBuildSystemName(override);
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); };
             // A escolha explicita tambem pode selecionar um Makefile auxiliar.
             auto candidates = systems;
             if (make) candidates.push_back(BuildSystem::Make);
