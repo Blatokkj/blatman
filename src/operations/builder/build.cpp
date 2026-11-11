@@ -4,6 +4,7 @@
 #include "shell.hpp"
 #include "operations/installation/base/baseInstall.hpp"
 #include "operations/builder/mozillaSupport.hpp"
+#include "operations/builder/mesonSupport.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -257,15 +258,29 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
 {
     try
     {
-        const fs::path source = fs::weakly_canonical(fs::absolute(projectPath));
-        if (!fs::is_directory(source)) return fail("Diretorio do projeto nao encontrado: " + source.string());
+        const fs::path source =
+            fs::weakly_canonical(fs::absolute(projectPath));
+
+        if (!fs::is_directory(source))
+            return fail("Diretorio do projeto nao encontrado: " + source.string());
+
         const fs::path destination = executableDirectory.empty()
             ? source / "build" / "blatman-bin"
             : fs::absolute(executableDirectory).lexically_normal();
-        if (system == BuildSystem::Cargo) return cargoBuild(source, destination);
-        if (system == BuildSystem::Go) return goBuild(source, destination);
-        std::vector<std::string> commands;
+
         const auto& installPaths = Blatman::Install::getInstallPaths();
+
+        if (system == BuildSystem::Cargo)
+            return cargoBuild(source, destination);
+
+        if (system == BuildSystem::Go)
+            return goBuild(source, destination);
+
+        if (system == BuildSystem::Meson)
+            return buildMesonProject(source, installPaths.PREFIX);
+
+        std::vector<std::string> commands;
+        
         switch (system)
         {
             case BuildSystem::CMake:

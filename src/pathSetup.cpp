@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <stdexcept>
 
 namespace Blatman::Install {
 
@@ -54,6 +55,21 @@ bool setupPath()
            << pathLine << '\n';
 
     return output.good();
+}
+
+fs::path getHomePath()
+{
+    const char *home = std::getenv("HOME");
+
+    if (!home || *home == '\0')
+        throw std::runtime_error("Variável HOME não encontrada.");
+
+    fs::path homePath(home);
+
+    if (!homePath.is_absolute())
+        throw std::runtime_error("O caminho HOME precisa ser absoluto.");
+
+    return homePath;
 }
 
 }

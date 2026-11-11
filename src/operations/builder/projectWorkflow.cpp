@@ -3,6 +3,7 @@
 #include "operations/installation/install.hpp"
 #include "operations/builder/builderDetector.hpp"
 #include "operations/installation/dependencies.hpp"
+#include "operations/installation/requirementsParser.hpp"
 #include "operations/installation/nativeInstall.hpp"
 #include "operations/builder/javaSupport.hpp"
 #include "operations/installation/temporaryDirectory.hpp"
@@ -18,6 +19,8 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdlib>
+
 namespace
 {
 class CacheLock
@@ -132,7 +135,8 @@ bool installProject(const std::string &argument, const Install &installer)
     } guard{active, identity};
     try
     {
-        fs::path cacheRoot = fs::current_path() / "blatman-cache";
+        const fs::path cacheRoot =
+            Blatman::Install::getHomePath() / ".blatman-cache";
         fs::create_directories(cacheRoot);
         std::ostringstream lock;
         lock << ".lock-" << std::hex << std::hash<std::string>{}(identity);
@@ -155,7 +159,7 @@ bool installProject(const std::string &argument, const Install &installer)
             result = checkedBuild(builder, source, system, workspace.path() / "artifacts");
             if (result.success)
                 break;
-            const auto missing = findMissingDependencies(result.output);
+            const auto missing = findMissingRequirements(result.output);
             if (missing.empty())
             {
                 std::cerr << "Compilação interrompida. Confira o diagnóstico acima.\n";
