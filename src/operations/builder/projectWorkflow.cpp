@@ -34,7 +34,7 @@ class CacheLock
         if (::fstat(fd_, &s) != 0 || !S_ISREG(s.st_mode) || ::flock(fd_, LOCK_EX | LOCK_NB) != 0)
         {
             ::close(fd_);
-            throw std::runtime_error("Cache em uso ou trava invalida; tente novamente depois.");
+            throw std::runtime_error("Cache em uso ou trava inválida; tente novamente depois.");
         }
     }
     ~CacheLock()
@@ -206,12 +206,12 @@ bool installProject(const std::string &argument, const Install &installer)
             !Blatman::Install::setupPath()) {
             std::cerr
             << "Aviso: não foi possivel configurar o PATH automaticamente. "
-            << "Adicione /blatman/bin manualmente.\n";
+            << "Adicione ~/.blatman/bin ao PATH manualmente.\n";
         }
 
         // configura o PATH somente na raiz real do sistema.
-        std::cout << "Instalacao concluida em "
-                  << Blatman::Install::PREFIX.string() << "!\n";
+        std::cout << "Instalação concluida em "
+                  << Blatman::Install::getInstallPaths().PREFIX.string() << "!\n";
 
         return true;
     }

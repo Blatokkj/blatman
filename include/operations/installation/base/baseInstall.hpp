@@ -6,11 +6,15 @@ namespace Blatman::Install {
 
     namespace fs = std::filesystem;
 
-    inline const fs::path PREFIX = "/blatman";
+    struct InstallPaths {
+        fs::path homePath;
+        fs::path PREFIX;
+        fs::path BIN;
+        fs::path LIB;
+        fs::path INCLUDE;
+        fs::path SHARE;
+    };
 
-    inline const fs::path BIN = PREFIX / "bin";
-    inline const fs::path LIB = PREFIX / "lib";
-    inline const fs::path INCLUDE = PREFIX / "include";
-    inline const fs::path SHARE = PREFIX / "share";
+    const InstallPaths& getInstallPaths();
 
 }

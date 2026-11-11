@@ -1,6 +1,7 @@
 #include "operations/installation/nativeInstall.hpp"
 #include "shell.hpp"
 #include "operations/installation/temporaryDirectory.hpp"
+#include "operations/installation/base/baseInstall.hpp"
 
 #include <nlohmann/json.hpp>
 #include <array>
@@ -16,7 +17,12 @@
 #include <unistd.h>
 
 namespace fs = std::filesystem;
+
 namespace {
+
+const auto& paths = Blatman::Install::getInstallPaths();
+const auto stagePrefix = paths.PREFIX.relative_path();
+
 using Json = nlohmann::json;
 
 bool fail(const std::string& message)
@@ -28,11 +34,11 @@ bool fail(const std::string& message)
 bool validStage(const fs::path& stage)
 {
     if (geteuid() == 0)
-        return fail("execute a preparacao como usuario comum.");
+        return fail("execute a preparação como usuario comum.");
     if (!stage.is_absolute() || stage != stage.lexically_normal() ||
         fs::symlink_status(stage).type() != fs::file_type::directory ||
         fs::canonical(stage) != stage || !fs::is_empty(stage))
-        return fail("o staging deve ser um diretorio absoluto, real e vazio.");
+        return fail("o staging deve ser um diretório absoluto, real e vazio.");
     return true;
 }
 
@@ -40,7 +46,7 @@ fs::path directory(const fs::path& path)
 {
     const fs::path result = fs::canonical(path);
     if (!fs::is_directory(result))
-        throw std::runtime_error("diretorio de projeto invalido: " + path.string());
+        throw std::runtime_error("diretório de projeto invalido: " + path.string());
     return result;
 }
 
@@ -149,7 +155,7 @@ void copyDocumentation(const fs::path& source, const std::string& name, const fs
             for (const auto& base : locations) {
                 for (const auto& candidate : {base / filename, base / ("man" + std::to_string(section)) / filename}) {
                     if (fs::is_regular_file(fs::symlink_status(candidate)) && copied.insert(filename).second)
-                        copyRegular(candidate, stage / "blatman/share/man" / ("man" + std::to_string(section)) / filename, documentMode);
+                        copyRegular(candidate, stage / stagePrefix / "share/man" / ("man" + std::to_string(section)) / filename, documentMode);
                 }
             }
         }
@@ -161,7 +167,7 @@ void copyDocumentation(const fs::path& source, const std::string& name, const fs
     for (const auto& filename : filenames)
         for (const auto& base : locations)
             if (fs::is_regular_file(fs::symlink_status(base / filename)) && copied.insert(filename).second)
-                copyRegular(base / filename, stage / "blatman/share/doc" / name / filename, documentMode);
+                copyRegular(base / filename, stage / stagePrefix / "share/doc" / name / filename, documentMode);
 }
 
 struct MakeGraph {
@@ -325,7 +331,7 @@ bool copyExecutables(const std::vector<fs::path>& paths, const fs::path& stage, 
         if (!path.is_absolute() || !elfExecutable(path) || !names.insert(path.filename().string()).second)
             return fail("os executaveis devem ser arquivos ELF absolutos com nomes distintos.");
     for (const auto& path : paths) {
-        copyRegular(path, stage / "blatman/bin" / path.filename(), executableMode);
+        copyRegular(path, stage / stagePrefix / "bin" / path.filename(), executableMode);
         if (docs) copyDocumentation(path.parent_path(), path.filename().string(), stage);
     }
     return populated(stage);
@@ -338,7 +344,7 @@ bool prepareCMake(const fs::path& buildDir, const fs::path& stage)
         if (!validStage(stage)) return false;
         const auto build = directory(buildDir);
         return runShell("env DESTDIR=" + quoteShell(stage.string()) + " cmake --install " +
-                        quoteShell(build.string()) + " --prefix /blatman").success && populated(stage);
+                        quoteShell(build.string()) + " --prefix " + quoteShell(paths.PREFIX.string())).success && populated(stage);
     } catch (const std::exception& error) { return fail(error.what()); }
 }
 
@@ -364,7 +370,7 @@ bool prepareMake(const fs::path& sourceDir, const fs::path& stage)
         const auto graph = parseMake(metadata.output);
         if (graph.targets.contains("install"))
             return runShell(cd + "make --no-print-directory install DESTDIR=" + quoteShell(stage.string()) +
-                            " prefix=/blatman PREFIX=/blatman").success && populated(stage);
+                            " prefix=" + quoteShell(paths.PREFIX.string()) + " PREFIX=" + quoteShell(paths.PREFIX.string())).success && populated(stage);
         const auto paths = makeExecutables(graph, source);
         if (paths.size() != 1)
             return fail("sem alvo install: o grafo do alvo padrao deve conter exatamente um executavel ELF; encontrados " +
@@ -397,7 +403,7 @@ bool prepareNpm(const fs::path& sourceDir, const fs::path& stage)
         const auto archive = pack.path() / filename;
         if (fs::symlink_status(archive).type() != fs::file_type::regular)
             return fail("npm pack nao produziu um arquivo regular.");
-        const auto prefix = stage / "usr";
+        const auto prefix = stage / stagePrefix;
         if (!runShell("npm install --global --omit=dev --no-audit --no-fund --prefix " + quoteShell(prefix.string()) +
                       " " + quoteShell(archive.string())).success) return fail("npm install falhou.");
         const auto installed = prefix / "lib/node_modules" / name;

@@ -1,4 +1,5 @@
 #include "operations/installation/installTransaction.hpp"
+#include "operations/installation/base/baseInstall.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -49,10 +50,27 @@ struct Created
     ino_t inode;
     bool directory;
 };
-bool withinUsr(const fs::path &p)
+bool withinInstallPrefix(const fs::path &p)
 {
-    return !p.is_absolute() && !p.empty() && *p.begin() == "blatman" &&
-           std::none_of(p.begin(), p.end(), [](const auto &c) { return c == ".."; });
+    const fs::path prefix =
+        Blatman::Install::getInstallPaths().PREFIX.relative_path();
+
+    if (p.empty() || p.is_absolute() || prefix.empty() || prefix.is_absolute())
+        return false;
+
+    auto pathIt = p.begin();
+
+    for (const auto &part : prefix)
+    {
+        if (pathIt == p.end() || *pathIt != part)
+            return false;
+
+        ++pathIt;
+    }
+
+    return std::none_of(p.begin(), p.end(), [](const auto &part) {
+        return part == "..";
+    });
 }
 int openDirectory(int root, const fs::path &path)
 {
@@ -106,8 +124,8 @@ void validateLink(const Entry &original, const std::map<fs::path, Entry> &entrie
                 pending = next.lexically_normal();
                 if (pending.filename().empty())
                     pending = pending.parent_path();
-                if (!withinUsr(pending))
-                    throw std::runtime_error("Link fora de /blatman: " + original.relative.string());
+                if (!withinInstallPrefix(pending))
+                    throw std::runtime_error("Link fora de ~/.blatman: " + original.relative.string());
                 redirected = true;
                 break;
             }
@@ -191,16 +209,16 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
             const auto relative = item.path().lexically_relative(stage);
             const auto status = item.symlink_status();
             const auto type = status.type();
-            if (!withinUsr(relative))
-                throw std::runtime_error("Receita tentou instalar fora de /blatman: " +
+            if (!withinInstallPrefix(relative))
+                throw std::runtime_error("Receita tentou instalar fora de ~/.blatman: " +
                                          relative.string());
             if (type != fs::file_type::directory && type != fs::file_type::regular &&
                 type != fs::file_type::symlink)
-                throw std::runtime_error("Tipo nao suportado: " + relative.string());
+                throw std::runtime_error("Tipo não suportado: " + relative.string());
             if (type != fs::file_type::symlink &&
                 (status.permissions() & (fs::perms::set_uid | fs::perms::set_gid)) !=
                     fs::perms::none)
-                throw std::runtime_error("Permissoes especiais nao suportadas: " +
+                throw std::runtime_error("Permissões especiais não suportadas: " +
                                          relative.string());
             entries.emplace(
                 relative,
@@ -209,7 +227,7 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
             files += type != fs::file_type::directory;
         }
         if (!files)
-            throw std::runtime_error("A receita nao preparou arquivos para instalar.");
+            throw std::runtime_error("A receita não preparou arquivos para instalar.");
         for (const auto &[name, entry] : entries)
         {
             (void)name;

@@ -1,4 +1,5 @@
 #include "pathSetup.hpp"
+#include "operations/installation/base/baseInstall.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -13,6 +14,7 @@ bool setupPath()
 {
     const char *home = std::getenv("HOME");
     const char *shell = std::getenv("SHELL");
+    const auto binPath = Blatman::Install::getInstallPaths().BIN;
 
     if (!home || !shell)
         return false;
@@ -29,7 +31,7 @@ bool setupPath()
         return false;
 
     const std::string pathLine =
-        "export PATH=\"/blatman/bin:$PATH\"";
+        "export PATH=\"" + binPath.string() + ":$PATH\"";
 
     // Verifica se ja esta configurado.
     if (fs::exists(rc)) {
@@ -37,7 +39,7 @@ bool setupPath()
         std::string line;
 
         while (std::getline(input, line)) {
-            if (line.find("/blatman/bin") != std::string::npos)
+            if (line.find(binPath.string()) != std::string::npos)
                 return true;
         }
     }

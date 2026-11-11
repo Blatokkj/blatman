@@ -1,5 +1,4 @@
 #include "commands.hpp"
-#include "operations/installation/installTransaction.hpp"
 #include <unistd.h>
 
 #include <cstdlib>
@@ -8,19 +7,10 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc == 3 && std::string(argv[1]) == "--publish-stage")
-    {
-        if (::geteuid() != 0)
-        {
-            std::cerr << "Publicacao no sistema requer privilegios.\n";
-            return EXIT_FAILURE;
-        }
-        return publishTree(argv[2], "/") ? EXIT_SUCCESS : EXIT_FAILURE;
-    }
     if (::geteuid() == 0 && argc > 1 &&
         (parseCommand(argv[1]) == Command::Install || parseCommand(argv[1]) == Command::Build))
     {
-        std::cerr << "Execute sem sudo: somente a publicacao final pede privilegios.\n";
+        std::cerr << "Execute sem sudo: a instalação dos pacotes ocorre no diretório do usuario.\n";
         return EXIT_FAILURE;
     }
     if (argc > 3)

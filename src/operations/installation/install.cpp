@@ -1,4 +1,5 @@
 #include "operations/installation/install.hpp"
+#include "operations/installation/base/baseInstall.hpp"
 #include "shell.hpp"
 #include "pkg/provider.hpp"
 #include "operations/installation/temporaryDirectory.hpp"
@@ -210,8 +211,6 @@ bool Install::publish(const fs::path &stage) const
 {
     if (destinationRoot_ != "/")
         return publishTree(stage, destinationRoot_);
-    const auto executable = fs::read_symlink("/proc/self/exe");
-    return runShell("sudo -- " + quoteShell(executable.string()) + " --publish-stage " +
-                    quoteShell(fs::absolute(stage).string()))
-        .success;
+
+    return publishTree(stage, "/");
 }

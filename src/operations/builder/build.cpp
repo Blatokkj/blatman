@@ -264,16 +264,17 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
         if (system == BuildSystem::Cargo) return cargoBuild(source, destination);
         if (system == BuildSystem::Go) return goBuild(source, destination);
         std::vector<std::string> commands;
+        const auto& installPaths = Blatman::Install::getInstallPaths();
         switch (system)
         {
             case BuildSystem::CMake:
-                commands = {"cmake -S . -B build " "-DCMAKE_INSTALL_PREFIX=" + Blatman::Install::PREFIX.string() + " -DCMAKE_INSTALL_BINDIR=bin -DCMAKE_INSTALL_LIBDIR=lib", "cmake --build build"};
+                commands = {"cmake -S . -B build " "-DCMAKE_INSTALL_PREFIX=" + installPaths.PREFIX.string() + " -DCMAKE_INSTALL_BINDIR=bin -DCMAKE_INSTALL_LIBDIR=lib", "cmake --build build"};
                 break;
             case BuildSystem::Make: commands = {"make"}; break;
             case BuildSystem::Meson:
                 commands = {std::string("meson setup ") +
                     (fs::is_regular_file(source / "build" / "meson-private" / "coredata.dat") ? "--reconfigure " : "") +
-                    "build --prefix=" + Blatman::Install::PREFIX.string() + " --bindir=bin --libdir=lib", "meson compile -C build"};
+                    "build --prefix=" + installPaths.PREFIX.string() + " --bindir=bin --libdir=lib", "meson compile -C build"};
                 break;
             case BuildSystem::Npm:
                 commands = {fs::is_regular_file(source / "package-lock.json") || fs::is_regular_file(source / "npm-shrinkwrap.json")
@@ -289,7 +290,7 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
             }
             case BuildSystem::Autotools:
                 if (!fs::is_regular_file(source / "configure")) commands.emplace_back("autoreconf -fi");
-                commands.emplace_back("sh ./configure --prefix=" + Blatman::Install::PREFIX.string() + " --bindir=bin --libdir=lib");
+                commands.emplace_back("sh ./configure --prefix=" + installPaths.PREFIX.string() + " --bindir=bin --libdir=lib");
                 commands.emplace_back("make");
                 break;
             default: return fail("Nenhum sistema de build reconhecido.");
