@@ -13,7 +13,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
+
 namespace fs = std::filesystem;
+
 namespace
 {
 class Descriptor
@@ -50,6 +52,7 @@ struct Created
     ino_t inode;
     bool directory;
 };
+
 bool withinInstallPrefix(const fs::path &p)
 {
     const fs::path prefix =
@@ -72,6 +75,32 @@ bool withinInstallPrefix(const fs::path &p)
         return part == "..";
     });
 }
+
+bool isInstallPrefixParent(const fs::path &p)
+{
+    const fs::path prefix =
+        Blatman::Install::getInstallPaths().PREFIX.relative_path();
+
+    if (p.empty() || p.is_absolute() || prefix.empty() || prefix.is_absolute())
+        return false;
+
+    if (std::any_of(p.begin(), p.end(), [](const auto &part) {
+            return part == "..";
+        }))
+        return false;
+
+    auto pathIt = p.begin();
+    auto prefixIt = prefix.begin();
+
+    for (; pathIt != p.end(); ++pathIt, ++prefixIt)
+    {
+        if (prefixIt == prefix.end() || *pathIt != *prefixIt)
+            return false;
+    }
+
+    return prefixIt != prefix.end();
+}
+
 int openDirectory(int root, const fs::path &path)
 {
     int current = ::dup(root);
@@ -209,7 +238,11 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
             const auto relative = item.path().lexically_relative(stage);
             const auto status = item.symlink_status();
             const auto type = status.type();
-            if (!withinInstallPrefix(relative))
+
+            const bool prefixParentDirectory =
+                type == fs::file_type::directory && isInstallPrefixParent(relative);
+
+            if (!withinInstallPrefix(relative) && !prefixParentDirectory)
                 throw std::runtime_error("Receita tentou instalar fora de ~/.blatman: " +
                                          relative.string());
             if (type != fs::file_type::directory && type != fs::file_type::regular &&
@@ -256,7 +289,7 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
                 if (entry.type == fs::file_type::symlink)
                 {
                     if (readLink(sourceParent.get(), name) != entry.link)
-                        throw std::runtime_error("Link mudou durante instalacao: " +
+                        throw std::runtime_error("Link mudou durante instalação: " +
                                                  relative.string());
                     if (::symlinkat(entry.link.c_str(), parent.get(), name.c_str()) != 0)
                         throw std::runtime_error("Falha criando link: " + relative.string());
@@ -268,7 +301,7 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
                 struct stat s{};
                 if (::fstat(input.get(), &s) != 0 || !S_ISREG(s.st_mode) ||
                     (s.st_mode & (S_ISUID | S_ISGID)))
-                    throw std::runtime_error("Arquivo mudou durante instalacao: " +
+                    throw std::runtime_error("Arquivo mudou durante instalação: " +
                                              relative.string());
                 Descriptor output(::openat(parent.get(), name.c_str(),
                                            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
@@ -315,7 +348,7 @@ bool publishTree(const fs::path &stagePath, const fs::path &rootPath)
     }
     catch (const std::exception &error)
     {
-        std::cerr << "Instalacao interrompida: " << error.what() << '\n';
+        std::cerr << "Instalação interrompida: " << error.what() << '\n';
         return false;
     }
 }
