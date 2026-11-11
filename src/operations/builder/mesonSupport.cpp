@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <set>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -222,6 +224,26 @@ bool restoreFeature(const fs::path& source,
     return restored.success;
 }
 
+bool onlyRemovesExternalDestinations(
+    const std::vector<InstallEntry>& previous,
+    const std::vector<InstallEntry>& updated)
+{
+    std::set<fs::path> previousPaths;
+    std::set<fs::path> updatedPaths;
+
+    for (const auto& entry : previous)
+        previousPaths.insert(entry.destination);
+
+    for (const auto& entry : updated)
+        updatedPaths.insert(entry.destination);
+
+    return updatedPaths.size() < previousPaths.size() &&
+           std::includes(
+               previousPaths.begin(), previousPaths.end(),
+               updatedPaths.begin(), updatedPaths.end()
+           );
+}
+
 bool adaptExternalFeatures(
     const fs::path& source,
     const fs::path& prefix,
@@ -275,7 +297,7 @@ bool adaptExternalFeatures(
         }
 
         // Só mantém a alteração se ela reduzir os destinos externos.
-        if (updated.size() < external.size())
+        if (onlyRemovesExternalDestinations(external, updated))
         {
             std::cout
                 << "Blatman: feature '" << feature.name

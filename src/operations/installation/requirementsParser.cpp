@@ -4,6 +4,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace
 {
@@ -25,7 +26,7 @@ const PatternList &dependencyPatterns()
         // --------------------------------------------------
 
         std::regex(
-            R"rx((?:Run-time|Build-time|Host) dependency\s+['"]?([^'"\s]+)['"]?\s+(?:not found|found:\s*NO))rx",
+            R"rx((?:Run-time|Build-time|Host) dependency\s+['"]?([^'"\s]+)['"]?\s+not found)rx",
             std::regex_constants::icase),
 
         std::regex(

@@ -141,7 +141,7 @@ Se vários sistemas coexistirem no mesmo repositório, use uma escolha explícit
 BLATMAN_BUILD_SYSTEM=cmake blatman build .
 ```
 
-As opções aceitas são `cmake`, `make`, `meson`, `cargo`, `go`, `npm`, `maven`, `gradle` e `autotools`.
+As opções aceitas são `cmake`, `make`, `meson`, `cargo`, `go`, `npm`, `maven`, `gradle`, `autotools` e `mozilla mach`.
 
 ## Java e uso de memória
 
