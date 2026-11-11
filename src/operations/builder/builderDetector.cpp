@@ -1,6 +1,5 @@
 #include "operations/builder/builderDetector.hpp"
 
-#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <iostream>
@@ -20,10 +19,26 @@ const char* buildSystemName(BuildSystem system)
         case BuildSystem::Gradle: return "Gradle";
         case BuildSystem::Autotools: return "Autotools";
         case BuildSystem::Go: return "Go";
-        case BuildSystem::MozillaMach: return "MozillaMach";
+        case BuildSystem::MozillaMach: return "Mozilla Mach";
         case BuildSystem::Unknown: return "Unknown";
     }
     return "Unknown";
+}
+
+namespace
+{
+    std::string normalizeBuildSystemName(std::string name)
+    {
+        std::string normalized;
+
+        for (unsigned char c : name)
+        {
+            if (std::isalnum(c))
+                normalized += static_cast<char>(std::tolower(c));
+        }
+
+        return normalized;
+    }
 }
 
 BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) const
@@ -56,9 +71,8 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) co
     {
         if (const char* override = std::getenv("BLATMAN_BUILD_SYSTEM"); override && *override)
         {
-            std::string wanted(override);
-            std::transform(wanted.begin(), wanted.end(), wanted.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            const std::string wanted = normalizeBuildSystemName(override);
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); };
             // A escolha explicita tambem pode selecionar um Makefile auxiliar.
             auto candidates = systems;
             if (make) candidates.push_back(BuildSystem::Make);
@@ -66,9 +80,8 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) co
             if (gradle) candidates.push_back(BuildSystem::Gradle);
             for (const auto candidate : candidates)
             {
-                std::string name(buildSystemName(candidate));
-                std::transform(name.begin(), name.end(), name.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                const std::string name = normalizeBuildSystemName(buildSystemName(candidate));
+
                 if (wanted == name) return candidate;
             }
             std::cerr << "BLATMAN_BUILD_SYSTEM não corresponde a um manifesto presente: "

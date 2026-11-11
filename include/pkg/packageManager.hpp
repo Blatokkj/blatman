@@ -11,10 +11,12 @@ enum class packageManager { // classe pra representar cada gerenciador de pacote
     Unknown
 };
 
-struct packageManagerInfo { // a base dos comandos, instalar, remover, atualizar...
-    std::string command;
+struct packageManagerInfo {
+    std::string installCommand;
     std::string install;
+    std::string removeCommand;
     std::string remove;
+    std::string updateCommand;
     std::string update;
 };
 

@@ -8,7 +8,9 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
             return {
                 "pacman",
                 "-S",
+                "pacman",
                 "-R",
+                "pacman",
                 "-Syu"
             };
 
@@ -16,7 +18,9 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
             return {
                 "apt",
                 "install",
+                "apt",
                 "remove",
+                "apt",
                 "upgrade"
             };
 
@@ -24,7 +28,9 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
             return {
                 "dnf",
                 "install",
+                "dnf",
                 "remove",
+                "dnf",
                 "upgrade"
             };
 
@@ -32,7 +38,9 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
             return {
                 "zypper",
                 "install",
+                "zypper",
                 "remove",
+                "zypper",
                 "update"
             };
 
@@ -40,21 +48,26 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
             return {
                 "brew",
                 "install",
+                "brew",
                 "uninstall",
+                "brew",
                 "upgrade"
             };
-        
+
         case packageManager::Xbps:
             return {
                 "xbps-install",
                 "-S",
-                "-R",
+                "xbps-remove",
+                "",
+                "xbps-install",
                 "-Su"
-           };
+            };
 
         case packageManager::Unknown:
             return {};
-    }
+        }
 
     return {};
+
 }

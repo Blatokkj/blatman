@@ -176,7 +176,7 @@ bool Install::installPackages(const std::vector<std::string> &packages) const
     if (manager != packageManager::Brew)
         command = "sudo ";
 
-    command += info.command + " " + info.install;
+    command += info.installCommand + " " + info.install;
 
     for (const auto &package : packages)
         command += " " + quoteShell(package);
