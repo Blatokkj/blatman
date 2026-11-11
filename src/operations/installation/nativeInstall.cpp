@@ -427,6 +427,99 @@ bool prepareNpm(const fs::path& sourceDir, const fs::path& stage)
     } catch (const std::exception& error) { return fail(error.what()); }
 }
 
+
+bool prepareMozillaMach(
+    const fs::path& sourceDir,
+    const fs::path& distributionDir,
+    const fs::path& stage)
+{
+    try {
+        if (!validStage(stage))
+            return false;
+
+        const auto source = directory(sourceDir);
+        const auto distribution = directory(distributionDir);
+
+        if (!fs::is_regular_file(source / "mach"))
+            return fail("executavel mach não encontrado.");
+
+        // Validate the package declared by Mozilla Mach.
+        const auto metadataPath = distribution / "package_name.txt";
+
+        if (fs::symlink_status(metadataPath).type() != fs::file_type::regular)
+            return fail("Mozilla Mach não declarou package_name.txt.");
+
+        std::ifstream metadata(metadataPath);
+
+        if (!metadata)
+            return fail("não foi possivel ler package_name.txt.");
+
+        std::string packageName;
+        std::getline(metadata, packageName);
+        packageName = trim(packageName);
+
+        const fs::path relativePackage(packageName);
+
+        if (packageName.empty() ||
+            relativePackage.is_absolute() ||
+            relativePackage.has_parent_path() ||
+            relativePackage == "." ||
+            relativePackage == "..")
+            return fail("nome do pacote Mozilla Mach inválido.");
+
+        const auto package = distribution / relativePackage;
+
+        if (fs::symlink_status(package).type() != fs::file_type::regular ||
+            !within(fs::canonical(package), distribution))
+            return fail("artefato declarado pelo Mozilla Mach nao encontrado.");
+
+        if (!paths.PREFIX.is_absolute())
+            return fail("o prefixo de instalação precisa ser absoluto.");
+
+        // Escape characters interpreted by GNU Make in MAKEFLAGS.
+        std::string makePrefix;
+
+        for (const char c : paths.PREFIX.string()) {
+            if (c == ' ' || c == '\\' || c == '#')
+                makePrefix += '\\';
+
+            if (c == '$')
+                makePrefix += '$';
+
+            makePrefix += c;
+        }
+
+        const std::string makeFlags = "prefix=" + makePrefix;
+
+        std::cout << "Mozilla Mach: preparando instalacao...\n";
+
+        // DESTDIR redirects installation into the staging root.
+        // prefix defines the final Blatman installation directory.
+        const auto installed = runShell(
+            "cd " + quoteShell(source.string()) +
+            " && env DESTDIR=" + quoteShell(stage.string()) +
+            " MAKEFLAGS=" + quoteShell(makeFlags) +
+            " ./mach install",
+            true
+        );
+
+        if (!installed.success) {
+            std::cerr << installed.output;
+            return fail(
+                "o alvo de instalação Mozilla Mach falhou. "
+                "O projeto precisa oferecer um alvo install compatível "
+                "com DESTDIR."
+            );
+        }
+
+        return populated(stage);
+    }
+    catch (const std::exception& error) {
+        return fail(error.what());
+    }
+}
+
+
 bool prepareExecutables(const std::vector<fs::path>& paths, const fs::path& stage)
 {
     try {

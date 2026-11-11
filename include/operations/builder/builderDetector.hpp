@@ -6,7 +6,7 @@ namespace fs = std::filesystem;
 
 enum class BuildSystem
 {
-    CMake, Make, Meson, Cargo, Npm, Maven, Gradle, Autotools, Go, Unknown
+    CMake, Make, Meson, Cargo, Npm, Maven, Gradle, Autotools, Go, MozillaMach, Unknown
 };
 
 const char* buildSystemName(BuildSystem system);

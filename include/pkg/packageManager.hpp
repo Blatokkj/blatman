@@ -7,6 +7,7 @@ enum class packageManager { // classe pra representar cada gerenciador de pacote
     Dnf,
     Zypper,
     Brew,
+    Xbps,
     Unknown
 };
 

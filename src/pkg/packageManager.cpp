@@ -18,6 +18,9 @@ packageManager detectPackageManager()
 
     if (std::system("command -v brew > /dev/null 2>&1") == 0)
         return packageManager::Brew;
+    
+    if (std::system("command -v xbps-install > /dev/null 2>&1") == 0)
+        return packageManager::Xbps;
 
     return packageManager::Unknown;
 }
@@ -44,6 +47,10 @@ void initializePackageManager()
 
         case packageManager::Brew:
             std::cout << "Homebrew detected!\n";
+            break;
+        
+        case packageManager::Xbps:
+            std::cout << "XBPS detected!\n";
             break;
 
         case packageManager::Unknown:

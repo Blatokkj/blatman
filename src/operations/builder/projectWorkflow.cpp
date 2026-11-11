@@ -68,6 +68,8 @@ std::vector<std::string> toolsFor(BuildSystem system, const fs::path &source)
                    : std::vector<std::string>{"autoreconf", "make"};
     case BuildSystem::Go:
         return {"go"};
+    case BuildSystem::MozillaMach:
+        return {"python3"};
     case BuildSystem::Unknown:
         return {};
     }
@@ -156,12 +158,12 @@ bool installProject(const std::string &argument, const Install &installer)
             const auto missing = findMissingDependencies(result.output);
             if (missing.empty())
             {
-                std::cerr << "Compilacao interrompida. Confira o diagnostico acima.\n";
+                std::cerr << "Compilação interrompida. Confira o diagnóstico acima.\n";
                 return false;
             }
             if (count >= 8 || !attempted.insert(missing).second)
             {
-                std::cerr << "Requisitos continuam ausentes apos a tentativa de resolucao.\n";
+                std::cerr << "Requisitos continuam ausentes após a tentativa de resolução.\n";
                 return false;
             }
             for (const auto &dependency : missing)
@@ -195,6 +197,15 @@ bool installProject(const std::string &argument, const Install &installer)
         case BuildSystem::Maven:
         case BuildSystem::Gradle:
             prepared = prepareJava(source, system, stage);
+            break;
+        case BuildSystem::MozillaMach:
+            if (result.distribution.empty())
+            {
+                std::cerr
+                    << "O projeto não disponibiliza uma distribuição instalável.\n";
+                return false;
+            }
+            prepared = prepareMozillaMach(source, result.distribution, stage);
             break;
         case BuildSystem::Unknown:
             return false;

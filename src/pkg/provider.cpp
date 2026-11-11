@@ -43,6 +43,14 @@ packageManagerInfo getPackageManagerInfo(packageManager manager)
                 "uninstall",
                 "upgrade"
             };
+        
+        case packageManager::Xbps:
+            return {
+                "xbps-install",
+                "-S",
+                "-R",
+                "-Su"
+           };
 
         case packageManager::Unknown:
             return {};

@@ -3,6 +3,7 @@
 #include "operations/builder/projectWorkflow.hpp"
 #include "shell.hpp"
 #include "operations/installation/base/baseInstall.hpp"
+#include "operations/builder/mozillaSupport.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -270,17 +271,22 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
             case BuildSystem::CMake:
                 commands = {"cmake -S . -B build " "-DCMAKE_INSTALL_PREFIX=" + installPaths.PREFIX.string() + " -DCMAKE_INSTALL_BINDIR=bin -DCMAKE_INSTALL_LIBDIR=lib", "cmake --build build"};
                 break;
-            case BuildSystem::Make: commands = {"make"}; break;
+            
+                case BuildSystem::Make: commands = {"make"}; break;
+            
             case BuildSystem::Meson:
                 commands = {std::string("meson setup ") +
                     (fs::is_regular_file(source / "build" / "meson-private" / "coredata.dat") ? "--reconfigure " : "") +
                     "build --prefix=" + installPaths.PREFIX.string() + " --bindir=bin --libdir=lib", "meson compile -C build"};
                 break;
-            case BuildSystem::Npm:
+            
+                case BuildSystem::Npm:
                 commands = {fs::is_regular_file(source / "package-lock.json") || fs::is_regular_file(source / "npm-shrinkwrap.json")
                     ? "npm ci" : "npm install", "npm run build --if-present"};
                 break;
-            case BuildSystem::Maven:
+            
+                case BuildSystem::Maven:
+            
             case BuildSystem::Gradle:
             {
                 const auto command = javaBuildCommand(source, system);
@@ -288,11 +294,17 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
                 commands.push_back(*command);
                 break;
             }
+            
             case BuildSystem::Autotools:
                 if (!fs::is_regular_file(source / "configure")) commands.emplace_back("autoreconf -fi");
                 commands.emplace_back("sh ./configure --prefix=" + installPaths.PREFIX.string() + " --bindir=bin --libdir=lib");
                 commands.emplace_back("make");
                 break;
+            
+            case BuildSystem::MozillaMach:
+                return mozillaBuild(source);
+                break;
+
             default: return fail("Nenhum sistema de build reconhecido.");
         }
         BuildResult result{true, {}, {}};
@@ -305,8 +317,9 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
             result.output += executed.output;
             if (!executed.success) return fail("Falha ao executar: " + command, result.output);
         }
-        return result;
+    return result;
     }
+    
     catch (const std::exception& error)
     {
         return fail(std::string("Falha no build: ") + error.what());

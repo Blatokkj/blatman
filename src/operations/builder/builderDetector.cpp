@@ -20,6 +20,7 @@ const char* buildSystemName(BuildSystem system)
         case BuildSystem::Gradle: return "Gradle";
         case BuildSystem::Autotools: return "Autotools";
         case BuildSystem::Go: return "Go";
+        case BuildSystem::MozillaMach: return "MozillaMach";
         case BuildSystem::Unknown: return "Unknown";
     }
     return "Unknown";
@@ -36,6 +37,8 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) co
     if (has("configure") || has("configure.ac") || has("configure.in"))
         systems.push_back(BuildSystem::Autotools);
     if (has("package.json")) systems.push_back(BuildSystem::Npm);
+    if (has("mach") && has("moz.configure"))
+        systems.push_back(BuildSystem::MozillaMach);
 
     const bool maven = has("pom.xml");
     const bool gradle = has("build.gradle") || has("build.gradle.kts") ||
@@ -68,7 +71,7 @@ BuildSystem BuildDetector::detect(const fs::path& repoPath, bool useOverride) co
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 if (wanted == name) return candidate;
             }
-            std::cerr << "BLATMAN_BUILD_SYSTEM nao corresponde a um manifesto presente: "
+            std::cerr << "BLATMAN_BUILD_SYSTEM não corresponde a um manifesto presente: "
                       << override << '\n';
             return BuildSystem::Unknown;
         }

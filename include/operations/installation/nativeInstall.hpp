@@ -9,4 +9,5 @@ bool prepareCMake(const std::filesystem::path& buildDir, const std::filesystem::
 bool prepareMeson(const std::filesystem::path& buildDir, const std::filesystem::path& stage);
 bool prepareMake(const std::filesystem::path& source, const std::filesystem::path& stage);
 bool prepareNpm(const std::filesystem::path& source, const std::filesystem::path& stage);
+bool prepareMozillaMach(const std::filesystem::path& sourceDir, const std::filesystem::path& distributionDir, const std::filesystem::path& stage);
 bool prepareExecutables(const std::vector<std::filesystem::path>& paths, const std::filesystem::path& stage);

@@ -51,13 +51,6 @@ blatman install https://github.com/apache/commons-codec.git
 - **CMake 3.20+**, **Git** e **nlohmann_json 3.6+** (necessário na compilação do Blatman).
 - Um compilador C++ e as ferramentas correspondentes ao projeto que será construído (por exemplo: `make`, `meson`/`ninja`, `cargo`, `go`, `npm`, `mvn` ou `gradle`).
 - **JDK instalado** para projetos Java. O Blatman seleciona uma instalação compatível, mas não instala JDKs automaticamente.
-- **Python 3** para executar os testes de regressão opcionais.
-
-No Arch Linux, as dependências **para compilar o próprio Blatman** podem ser instaladas com:
-
-```bash
-sudo pacman -S --needed base-devel cmake git nlohmann-json
-```
 
 > As dependências de cada projeto continuam sendo responsabilidade de seu ecossistema. Maven, Gradle, Cargo, Go e npm não são instalados automaticamente por esse comando.
 
