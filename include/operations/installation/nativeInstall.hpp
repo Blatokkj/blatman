@@ -3,11 +3,35 @@
 #include <filesystem>
 #include <vector>
 
-// Prepare an installation without publishing it. The caller owns an existing,
-// empty, absolute staging directory. These helpers refuse privileged execution.
-bool prepareCMake(const std::filesystem::path& buildDir, const std::filesystem::path& stage);
-bool prepareMeson(const std::filesystem::path& buildDir, const std::filesystem::path& stage);
-bool prepareMake(const std::filesystem::path& source, const std::filesystem::path& stage);
-bool prepareNpm(const std::filesystem::path& source, const std::filesystem::path& stage);
-bool prepareMozillaMach(const std::filesystem::path& sourceDir, const std::filesystem::path& distributionDir, const std::filesystem::path& stage);
-bool prepareExecutables(const std::vector<std::filesystem::path>& paths, const std::filesystem::path& stage);
+// Preparação de instalações sem publicação.
+// O chamador fornece um diretório staging absoluto, existente e vazio.
+
+bool prepareCMake(
+    const std::filesystem::path& buildDir,
+    const std::filesystem::path& stage
+);
+
+bool prepareMeson(
+    const std::filesystem::path& buildDir,
+    const std::filesystem::path& stage
+);
+
+bool prepareMake(
+    const std::filesystem::path& source,
+    const std::filesystem::path& stage
+);
+
+bool prepareNpm(
+    const std::filesystem::path& source,
+    const std::filesystem::path& stage
+);
+
+bool prepareMozillaMach(
+    const std::filesystem::path& source,
+    const std::filesystem::path& stage
+);
+
+bool prepareExecutables(
+    const std::vector<std::filesystem::path>& paths,
+    const std::filesystem::path& stage
+);

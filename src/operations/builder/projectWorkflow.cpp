@@ -391,7 +391,7 @@ bool installProject(const std::string &argument, const Install &installer)
                 prepared = prepareJava(source, system, stage);
                 break;
             case BuildSystem::MozillaMach:
-                prepared = prepareMozillaMach(source, distributionDir, stage);
+                prepared = prepareMozillaMach(source, stage);
                 break;
             case BuildSystem::Unknown:
                 return false;

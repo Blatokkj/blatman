@@ -1,99 +1,64 @@
-
+#include "operations/installation/details/mozilla.hpp"
 #include "operations/installation/nativeInstall.hpp"
 #include "operations/installation/base/baseInstall.hpp"
 #include "operations/installation/details/installationHelpers.hpp"
-#include "shell.hpp"
 
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
-#include <string>
 
 namespace fs = std::filesystem;
 
-namespace
-{
-
-std::string makePrefixAssignment(const fs::path& prefix)
-{
-    std::string escaped;
-
-    for (const char c : prefix.string())
-    {
-        if (c == ' ' || c == '\\' || c == '#')
-            escaped += '\\';
-
-        if (c == '$')
-            escaped += '$';
-
-        escaped += c;
-    }
-
-    return "prefix=" + escaped;
-}
-
-}
-
 bool prepareMozillaMach(
     const fs::path& sourceDir,
-    const fs::path& distributionDir,
     const fs::path& stage
 )
 {
+    using namespace installation_detail;
+
     try
     {
-        if (!installation_detail::validStage(stage))
+        if (!validStage(stage))
             return false;
 
-        const auto source =
-            installation_detail::directory(sourceDir);
-
-        if (!fs::is_regular_file(source / "mach"))
-        {
-            return installation_detail::fail(
-                "executavel mach não encontrado."
-            );
-        }
+        const auto source = directory(sourceDir);
 
         const auto& prefix =
             Blatman::Install::getInstallPaths().PREFIX;
 
         if (!prefix.is_absolute())
         {
-            return installation_detail::fail(
-                "o prefixo de instalação precisa ser absoluto."
+            return fail(
+                "O prefixo de instalação precisa ser absoluto."
             );
         }
 
-        const std::string makeFlags =
-            makePrefixAssignment(prefix);
+        // 1. Descobrir o ambiente real do Mach.
+        const auto environment =
+            mozilla_detail::inspectMozilla(source);
 
-        std::cout
-            << "Mozilla Mach: preparando instalacao...\n";
+        // 2. Verificar se há uma interface de instalação.
+        if (!mozilla_detail::inspectInstallMozilla(environment))
+            return false;
 
-        const auto installed = runShell(
-            "cd " + quoteShell(source.string()) +
-            " && env DESTDIR=" + quoteShell(stage.string()) +
-            " MAKEFLAGS=" + quoteShell(makeFlags) +
-            " ./mach install",
-            true
-        );
-
-        if (!installed.success)
+        // 3. Executar a instalação sem publicar no sistema.
+        if (!mozilla_detail::stageMozilla(
+                environment,
+                stage,
+                prefix
+            ))
         {
-            std::cerr << installed.output;
-
-            return installation_detail::fail(
-                "o alvo de instalação Mozilla Mach falhou. "
-                "O projeto precisa oferecer um alvo install "
-                "compatível com DESTDIR."
-            );
+            return false;
         }
 
-        return installation_detail::populated(stage);
+        // 4. Validar o resultado antes da publicação.
+        if (!mozilla_detail::validateMozilla(stage, prefix))
+            return false;
+
+        return true;
     }
     catch (const std::exception& error)
     {
-        return installation_detail::fail(error.what());
+        return fail(error.what());
     }
 }
