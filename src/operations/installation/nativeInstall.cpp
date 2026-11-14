@@ -2,6 +2,7 @@
 #include "shell.hpp"
 #include "operations/installation/temporaryDirectory.hpp"
 #include "operations/installation/base/baseInstall.hpp"
+#include "operations/installation/details/installationHelpers.hpp"
 
 #include <nlohmann/json.hpp>
 #include <array>
@@ -12,59 +13,27 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <filesystem>
+#include <vector>
 
 namespace fs = std::filesystem;
 
 namespace {
 
+using Json = nlohmann::json;
+
 const auto& paths = Blatman::Install::getInstallPaths();
 const auto stagePrefix = paths.PREFIX.relative_path();
 
-using Json = nlohmann::json;
-
-bool fail(const std::string& message)
-{
-    std::cerr << "Preparacao da instalacao: " << message << '\n';
-    return false;
-}
-
-bool validStage(const fs::path& stage)
-{
-    if (geteuid() == 0)
-        return fail("execute a preparação como usuario comum.");
-    if (!stage.is_absolute() || stage != stage.lexically_normal() ||
-        fs::symlink_status(stage).type() != fs::file_type::directory ||
-        fs::canonical(stage) != stage || !fs::is_empty(stage))
-        return fail("o staging deve ser um diretório absoluto, real e vazio.");
-    return true;
-}
-
-fs::path directory(const fs::path& path)
-{
-    const fs::path result = fs::canonical(path);
-    if (!fs::is_directory(result))
-        throw std::runtime_error("diretório de projeto invalido: " + path.string());
-    return result;
-}
-
-bool within(const fs::path& path, const fs::path& root)
-{
-    auto p = path.begin();
-    for (auto r = root.begin(); r != root.end(); ++r, ++p)
-        if (p == path.end() || *p != *r) return false;
-    return true;
-}
-
-bool populated(const fs::path& stage)
-{
-    if (fs::symlink_status(stage).type() != fs::file_type::directory ||
-        fs::canonical(stage) != stage || fs::is_empty(stage))
-        return fail("o instalador nao produziu um staging valido.");
-    return true;
-}
+using installation_detail::fail;
+using installation_detail::validStage;
+using installation_detail::directory;
+using installation_detail::within;
+using installation_detail::populated;
 
 // Decode both ELF classes and byte orders. ET_DYN alone also describes shared
 // libraries; require a program interpreter or the explicit DF_1_PIE flag.
@@ -348,16 +317,6 @@ bool prepareCMake(const fs::path& buildDir, const fs::path& stage)
     } catch (const std::exception& error) { return fail(error.what()); }
 }
 
-bool prepareMeson(const fs::path& buildDir, const fs::path& stage)
-{
-    try {
-        if (!validStage(stage)) return false;
-        const auto build = directory(buildDir);
-        return runShell("env DESTDIR=" + quoteShell(stage.string()) + " meson install --no-rebuild -C " +
-                        quoteShell(build.string())).success && populated(stage);
-    } catch (const std::exception& error) { return fail(error.what()); }
-}
-
 bool prepareMake(const fs::path& sourceDir, const fs::path& stage)
 {
     try {
@@ -426,99 +385,6 @@ bool prepareNpm(const fs::path& sourceDir, const fs::path& stage)
         return populated(stage);
     } catch (const std::exception& error) { return fail(error.what()); }
 }
-
-
-bool prepareMozillaMach(
-    const fs::path& sourceDir,
-    const fs::path& distributionDir,
-    const fs::path& stage)
-{
-    try {
-        if (!validStage(stage))
-            return false;
-
-        const auto source = directory(sourceDir);
-        const auto distribution = directory(distributionDir);
-
-        if (!fs::is_regular_file(source / "mach"))
-            return fail("executavel mach não encontrado.");
-
-        // Validate the package declared by Mozilla Mach.
-        const auto metadataPath = distribution / "package_name.txt";
-
-        if (fs::symlink_status(metadataPath).type() != fs::file_type::regular)
-            return fail("Mozilla Mach não declarou package_name.txt.");
-
-        std::ifstream metadata(metadataPath);
-
-        if (!metadata)
-            return fail("não foi possivel ler package_name.txt.");
-
-        std::string packageName;
-        std::getline(metadata, packageName);
-        packageName = trim(packageName);
-
-        const fs::path relativePackage(packageName);
-
-        if (packageName.empty() ||
-            relativePackage.is_absolute() ||
-            relativePackage.has_parent_path() ||
-            relativePackage == "." ||
-            relativePackage == "..")
-            return fail("nome do pacote Mozilla Mach inválido.");
-
-        const auto package = distribution / relativePackage;
-
-        if (fs::symlink_status(package).type() != fs::file_type::regular ||
-            !within(fs::canonical(package), distribution))
-            return fail("artefato declarado pelo Mozilla Mach nao encontrado.");
-
-        if (!paths.PREFIX.is_absolute())
-            return fail("o prefixo de instalação precisa ser absoluto.");
-
-        // Escape characters interpreted by GNU Make in MAKEFLAGS.
-        std::string makePrefix;
-
-        for (const char c : paths.PREFIX.string()) {
-            if (c == ' ' || c == '\\' || c == '#')
-                makePrefix += '\\';
-
-            if (c == '$')
-                makePrefix += '$';
-
-            makePrefix += c;
-        }
-
-        const std::string makeFlags = "prefix=" + makePrefix;
-
-        std::cout << "Mozilla Mach: preparando instalacao...\n";
-
-        // DESTDIR redirects installation into the staging root.
-        // prefix defines the final Blatman installation directory.
-        const auto installed = runShell(
-            "cd " + quoteShell(source.string()) +
-            " && env DESTDIR=" + quoteShell(stage.string()) +
-            " MAKEFLAGS=" + quoteShell(makeFlags) +
-            " ./mach install",
-            true
-        );
-
-        if (!installed.success) {
-            std::cerr << installed.output;
-            return fail(
-                "o alvo de instalação Mozilla Mach falhou. "
-                "O projeto precisa oferecer um alvo install compatível "
-                "com DESTDIR."
-            );
-        }
-
-        return populated(stage);
-    }
-    catch (const std::exception& error) {
-        return fail(error.what());
-    }
-}
-
 
 bool prepareExecutables(const std::vector<fs::path>& paths, const fs::path& stage)
 {

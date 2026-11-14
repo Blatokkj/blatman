@@ -8,10 +8,9 @@
 
 struct BuildResult
 {
-    bool success;
+    bool success = false;
     std::string output;
     std::vector<std::filesystem::path> executables;
-    std::filesystem::path distribution;
 };
 
 class Build
@@ -19,7 +18,9 @@ class Build
 public:
     bool execute(const std::string& argument) const;
 
-    BuildResult run(const std::filesystem::path& projectPath,
-                    BuildSystem system,
-                    const std::filesystem::path& executableDirectory = {}) const;
+    BuildResult run(
+        const std::filesystem::path& projectPath,
+        BuildSystem system,
+        const std::filesystem::path& executableDirectory = {}
+    ) const;
 };

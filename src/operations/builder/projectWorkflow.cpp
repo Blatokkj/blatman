@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <optional>
+#include <utility>
 
 namespace
 {
@@ -47,6 +49,146 @@ class CacheLock
     CacheLock(const CacheLock &) = delete;
     CacheLock &operator=(const CacheLock &) = delete;
 };
+
+class ScopedBuildEnvironment
+{
+    struct SavedVariable
+    {
+        std::string name;
+        std::optional<std::string> value;
+    };
+
+    std::vector<SavedVariable> saved_;
+
+    static bool containsEntry(
+        const std::string& value,
+        const std::string& entry)
+    {
+        std::size_t begin = 0;
+
+        while (true)
+        {
+            const auto end = value.find(':', begin);
+
+            const auto current = value.substr(
+                begin,
+                end == std::string::npos
+                    ? std::string::npos
+                    : end - begin
+            );
+
+            if (current == entry)
+                return true;
+
+            if (end == std::string::npos)
+                return false;
+
+            begin = end + 1;
+        }
+    }
+
+    void prepend(
+        const std::string& variable,
+        const std::vector<fs::path>& directories)
+    {
+        const char* current = std::getenv(variable.c_str());
+
+        saved_.push_back({
+            variable,
+            current
+                ? std::optional<std::string>(current)
+                : std::nullopt
+        });
+
+        const bool wasSet = current != nullptr;
+        std::string value = wasSet ? current : "";
+
+        for (auto it = directories.rbegin();
+             it != directories.rend(); ++it)
+        {
+            if (it->empty() || !it->is_absolute())
+                throw std::runtime_error(
+                    "Diretório inválido para " + variable + "."
+                );
+
+            const auto entry = it->lexically_normal().string();
+
+            // Variáveis de caminhos usam ':' como separador.
+            if (entry.find(':') != std::string::npos)
+                throw std::runtime_error(
+                    "Caminho não representável em " + variable + ": " +
+                    entry
+                );
+
+            if (containsEntry(value, entry))
+                continue;
+
+            if (wasSet)
+                value = entry + ":" + value;
+            else
+                value = entry;
+        }
+
+        if (::setenv(variable.c_str(), value.c_str(), 1) != 0)
+            throw std::runtime_error(
+                "Não foi possível configurar " + variable + "."
+            );
+    }
+
+    void restore() noexcept
+    {
+        for (auto it = saved_.rbegin(); it != saved_.rend(); ++it)
+        {
+            if (it->value)
+                ::setenv(
+                    it->name.c_str(),
+                    it->value->c_str(),
+                    1
+                );
+            else
+                ::unsetenv(it->name.c_str());
+        }
+
+        saved_.clear();
+    }
+
+public:
+    ScopedBuildEnvironment()
+    {
+        try
+        {
+            const auto& paths =
+                Blatman::Install::getInstallPaths();
+
+            prepend("PATH", {
+                paths.BIN
+            });
+
+            prepend("PKG_CONFIG_PATH", {
+                paths.LIB / "pkgconfig",
+                paths.SHARE / "pkgconfig"
+            });
+
+            prepend("CMAKE_PREFIX_PATH", {
+                paths.PREFIX
+            });
+        }
+        catch (...)
+        {
+            restore();
+            throw;
+        }
+    }
+
+    ~ScopedBuildEnvironment()
+    {
+        restore();
+    }
+
+    ScopedBuildEnvironment(const ScopedBuildEnvironment&) = delete;
+    ScopedBuildEnvironment& operator=(const ScopedBuildEnvironment&) = delete;
+};
+
 std::vector<std::string> toolsFor(BuildSystem system, const fs::path &source)
 {
     switch (system)
@@ -78,17 +220,55 @@ std::vector<std::string> toolsFor(BuildSystem system, const fs::path &source)
     }
     return {};
 }
-BuildResult checkedBuild(const Build &builder, const fs::path &source, BuildSystem system,
-                         const fs::path &output)
+
+BuildResult checkedBuild(
+    const Build& builder,
+    const fs::path& source,
+    BuildSystem system,
+    const fs::path& output)
 {
-    for (const auto &tool : toolsFor(system, source))
-        if (!runShell("command -v " + quoteShell(tool) + " >/dev/null 2>&1", false).success)
+    try
+    {
+        ScopedBuildEnvironment environment;
+
+        for (const auto& tool : toolsFor(system, source))
         {
-            std::cerr << "Ferramenta necessaria nao encontrada: " << tool << '\n';
-            return {false, "blatman:missing-tool:" + tool, {}};
+            if (!runShell(
+                    "command -v " + quoteShell(tool) +
+                    " >/dev/null 2>&1",
+                    false
+                ).success)
+            {
+                std::cerr
+                    << "Ferramenta necessária não encontrada: "
+                    << tool << '\n';
+
+                return {
+                    false,
+                    "blatman:missing-tool:" + tool,
+                    {}
+                };
+            }
         }
-    return builder.run(source, system, output);
+
+        return builder.run(source, system, output);
+    }
+    catch (const std::exception& error)
+    {
+        const std::string message =
+            "Falha ao preparar ambiente de build: " +
+            std::string(error.what());
+
+        std::cerr << message << '\n';
+
+        return {
+            false,
+            "blatman:build-environment:" + message,
+            {}
+        };
+    }
 }
+
 } // namespace
 bool buildProject(const std::string &argument, const Build &builder)
 {
@@ -106,6 +286,7 @@ bool buildProject(const std::string &argument, const Build &builder)
         std::cout << "Build concluido com sucesso!\n";
     return result.success;
 }
+
 bool installProject(const std::string &argument, const Install &installer)
 {
     if (argument.empty())
@@ -154,9 +335,10 @@ bool installProject(const std::string &argument, const Install &installer)
         Build builder;
         BuildResult result{false, {}, {}};
         std::set<std::vector<std::string>> attempted;
+        const fs::path distributionDir = workspace.path() / "artifacts";
         for (unsigned count = 0;; ++count)
         {
-            result = checkedBuild(builder, source, system, workspace.path() / "artifacts");
+            result = checkedBuild(builder, source, system, distributionDir);;
             if (result.success)
                 break;
             const auto missing = findMissingRequirements(result.output);
@@ -176,44 +358,47 @@ bool installProject(const std::string &argument, const Install &installer)
                     return false;
         }
         std::cout << "Compilação concluída!\n";
+        
         const auto stage = workspace.path() / "stage";
+        
         fs::create_directory(stage);
+        
         bool prepared = false;
-        switch (system)
         {
-        case BuildSystem::CMake:
-            prepared = prepareCMake(source / "build", stage);
-            break;
-        case BuildSystem::Meson:
-            prepared = prepareMeson(source / "build", stage);
-            break;
-        case BuildSystem::Make:
-        case BuildSystem::Autotools:
-            prepared = prepareMake(source, stage);
-            break;
-        case BuildSystem::Npm:
-            prepared = prepareNpm(source, stage);
-            break;
-        case BuildSystem::Cargo:
-        case BuildSystem::Go:
-            prepared = prepareExecutables(result.executables, stage);
-            break;
-        case BuildSystem::Maven:
-        case BuildSystem::Gradle:
-            prepared = prepareJava(source, system, stage);
-            break;
-        case BuildSystem::MozillaMach:
-            if (result.distribution.empty())
+            ScopedBuildEnvironment environment;
+
+            switch (system)
             {
-                std::cerr
-                    << "O projeto não disponibiliza uma distribuição instalável.\n";
+            case BuildSystem::CMake:
+                prepared = prepareCMake(source / "build", stage);
+                break;
+            case BuildSystem::Meson:
+                prepared = prepareMeson(source / "build", stage);
+                break;
+            case BuildSystem::Make:
+            case BuildSystem::Autotools:
+                prepared = prepareMake(source, stage);
+                break;
+            case BuildSystem::Npm:
+                prepared = prepareNpm(source, stage);
+                break;
+            case BuildSystem::Cargo:
+            case BuildSystem::Go:
+                prepared = prepareExecutables(result.executables, stage);
+                break;
+            case BuildSystem::Maven:
+            case BuildSystem::Gradle:
+                prepared = prepareJava(source, system, stage);
+                break;
+            case BuildSystem::MozillaMach:
+                prepared = prepareMozillaMach(source, distributionDir, stage);
+                break;
+            case BuildSystem::Unknown:
                 return false;
             }
-            prepared = prepareMozillaMach(source, result.distribution, stage);
-            break;
-        case BuildSystem::Unknown:
-            return false;
+
         }
+
         if (!prepared || !installer.publish(stage))
             return false;
 

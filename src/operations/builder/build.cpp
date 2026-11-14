@@ -277,7 +277,7 @@ BuildResult Build::run(const fs::path& projectPath, BuildSystem system,
             return goBuild(source, destination);
 
         if (system == BuildSystem::Meson)
-            return buildMesonProject(source, installPaths.PREFIX);
+            return buildMesonProject(source);
 
         std::vector<std::string> commands;
         
