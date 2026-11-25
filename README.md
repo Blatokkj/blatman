@@ -4,7 +4,7 @@
 
 **Do código-fonte à instalação, sem precisar decorar um comando para cada sistema de build.**
 
-Um gerenciador de compilação e instalação para Linux, escrito em **C++20**. O Blatman identifica o sistema de build de um projeto, coordena a compilação e prepara os arquivos antes de publicá-los no destino final.
+Um gerenciador de compilação e instalação para Linux, escrito em **C++20**. O Blatman identifica o sistema de build de um projeto, coordena a compilação e valida os arquivos em staging antes de publicá-los no diretório do usuário.
 
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-6C3FC5?style=flat-square&logo=cplusplus&logoColor=white)
 ![Linux](https://img.shields.io/badge/platform-Linux-292438?style=flat-square&logo=linux&logoColor=white)
@@ -19,13 +19,13 @@ Um gerenciador de compilação e instalação para Linux, escrito em **C++20**. 
 
 ## Por que o Blatman?
 
-Um projeto usa CMake. Outro usa Cargo. O seguinte depende de Maven, Gradle ou Meson. Compilar cada um à mão exige conhecer ferramentas, argumentos e etapas de instalação diferentes.
+Um projeto usa CMake. Outro usa Cargo. O seguinte depende de Maven, Gradle, Meson ou Mach. Compilar cada um à mão exige conhecer ferramentas, argumentos e etapas de instalação diferentes.
 
 O **Blatman** nasceu para oferecer **um fluxo consistente** sobre essas ferramentas — sem tentar substituir seus compiladores, gerenciadores de dependências ou sistemas de build.
 
 ```bash
 blatman build .
-blatman install https://github.com/apache/commons-codec.git
+blatman install [https://github.com/apache/commons-codec.git](https://github.com/apache/commons-codec.git)
 ```
 
 > [!IMPORTANT]
@@ -33,15 +33,16 @@ blatman install https://github.com/apache/commons-codec.git
 
 ## Funcionalidades
 
-- **Detecção de nove sistemas de build**, com opção de escolha explícita quando há mais de um manifesto.
+- **Detecção de dez sistemas de build**, com opção de escolha explícita via `BLATMAN_BUILD_SYSTEM` quando há mais de um manifesto.
 - **Build local** por uma interface única (`blatman build <diretório>`).
-- **Instalação a partir de repositórios Git HTTPS** no formato `https://host/autor/repositório.git`.
-- **Reutilização de clones em cache**, evitando baixar novamente um repositório que já está presente.
-- **Staging de instalação**: os artefatos são preparados numa árvore temporária antes de chegar ao sistema.
-- **Validação de destinos, conflitos e links simbólicos**, com tentativa de rollback dos arquivos criados caso a publicação falhe.
-- **Resolução interativa de dependências ausentes** a partir de alguns diagnósticos de erro, por pacote da distribuição ou outra URL Git.
-- **Suporte a Java com seleção de JDK**, Maven e Gradle, incluindo um perfil de memória econômico por padrão.
-- **Separação de privilégios**: o build roda como usuário comum; apenas a publicação em `/usr` solicita `sudo`.
+- **Instalação a partir de repositórios Git HTTPS** no formato `https://host/autor/repositório.git`, com suporte a submódulos.
+- **Reutilização de clones em cache** em `~/.blatman-cache/`, com trava contra execuções simultâneas no mesmo repositório.
+- **Instalação isolada no usuário (`~/.blatman`)**: pacotes, bibliotecas, headers e dados são publicados em `~/.blatman/{bin,lib,include,share}`, **sem exigir `sudo`** na compilação ou publicação.
+- **Ambiente encadeado de build**: ao compilar ou instalar, o Blatman injeta `~/.blatman` em `PATH`, `PKG_CONFIG_PATH` e `CMAKE_PREFIX_PATH` para que dependências recém-instaladas sejam encontradas pelos projetos seguintes.
+- **Configuração automática de `PATH`**: em `bash` e `zsh`, adiciona `~/.blatman/bin` ao `~/.bashrc` ou `~/.zshrc` ao instalar na raiz padrão.
+- **Staging e transação atômica**: os artefatos são preparados numa árvore temporária, validados contra escapes de prefixo, conflitos e links simbólicos inválidos, com rollback em caso de falha.
+- **Resolução interativa de dependências ausentes** a partir de diagnósticos de erro, via gerenciador de pacotes da distribuição (`pacman`, `apt`, `dnf`, `zypper`, `xbps-install`, `brew`) ou outra URL Git HTTPS.
+- **Suporte a Java com seleção de JDK**, Maven e Gradle, incluindo perfil econômico de memória por padrão.
 
 ## Começando
 
@@ -49,15 +50,15 @@ blatman install https://github.com/apache/commons-codec.git
 
 - **Linux** e ferramentas de desenvolvimento C/C++ compatíveis com **C++20**.
 - **CMake 3.20+**, **Git** e **nlohmann_json 3.6+** (necessário na compilação do Blatman).
-- Um compilador C++ e as ferramentas correspondentes ao projeto que será construído (por exemplo: `make`, `meson`/`ninja`, `cargo`, `go`, `npm`, `mvn` ou `gradle`).
-- **JDK instalado** para projetos Java. O Blatman seleciona uma instalação compatível, mas não instala JDKs automaticamente.
+- Um compilador C++ e as ferramentas correspondentes ao projeto que será construído (por exemplo: `make`, `meson`/`ninja`, `cargo`, `rustc`, `go`, `npm`/`node`, `mvn`, `gradle`, `autoreconf` ou `python3`).
+- **JDK instalado** para projetos Java. O Blatman seleciona uma instalação compatível, mas não baixa nem instala JDKs automaticamente.
 
-> As dependências de cada projeto continuam sendo responsabilidade de seu ecossistema. Maven, Gradle, Cargo, Go e npm não são instalados automaticamente por esse comando.
+> As ferramentas externas de cada ecossistema continuam sendo pré-requisito no ambiente. Maven, Gradle, Cargo, Go, npm e Python não são instalados automaticamente na compilação do Blatman.
 
 ### Compilar e instalar o Blatman
 
 ```bash
-git clone https://github.com/Blatokkj/blatman.git
+git clone [https://github.com/Blatokkj/blatman.git](https://github.com/Blatokkj/blatman.git)
 cd blatman
 
 cmake -S . -B build \
@@ -71,7 +72,7 @@ sudo cmake --install build
 blatman help
 ```
 
-Por padrão, a configuração CMake do projeto utiliza `/usr` como prefixo; o executável é instalado em **`/usr/bin/blatman`**. O `-j2` acima é uma escolha conservadora para máquinas com pouca memória, e pode ser ajustado.
+Por padrão, o `CMakeLists.txt` do projeto utiliza `/usr` como prefixo para o binário do próprio Blatman, instalando-o em **`/usr/bin/blatman`**. O `-j2` acima é uma escolha conservadora para máquinas com pouca memória e pode ser ajustado conforme o hardware.
 
 Para conferir qual binário está sendo executado:
 
@@ -81,6 +82,9 @@ type -a blatman
 
 ## Uso
 
+> [!NOTE]
+> Execute `blatman build` e `blatman install` como **usuário comum** (sem `sudo`). O Blatman recusa executar esses comandos como `root`, pois os pacotes são instalados em `~/.blatman`. Caso o fluxo interativo precise instalar uma dependência do sistema via gerenciador da distribuição, apenas essa etapa solicitará `sudo`.
+
 ### Compilar um projeto local
 
 ```bash
@@ -88,36 +92,52 @@ cd /caminho/do/projeto
 blatman build .
 ```
 
-O Blatman detecta o sistema de build a partir dos arquivos presentes na pasta e invoca a ferramenta correspondente. **Build não significa instalação**: `build` não publica arquivos no sistema.
+O Blatman detecta o sistema de build a partir dos arquivos presentes na pasta e invoca a ferramenta correspondente. **Build não significa instalação**: `build` não publica arquivos em `~/.blatman`.
 
 ### Clonar, compilar e instalar
 
 ```bash
-blatman install https://github.com/apache/commons-codec.git
+blatman install [https://github.com/apache/commons-codec.git](https://github.com/apache/commons-codec.git)
 ```
 
-Esse fluxo clona (ou reutiliza) o repositório, detecta o sistema de build, executa a compilação, prepara os artefatos e tenta publicá-los sob `/usr`. Quando a publicação exige privilégios, o Blatman solicita `sudo` apenas na etapa final.
+Esse fluxo clona (ou reutiliza) o repositório em `~/.blatman-cache/`, detecta o sistema de build, executa a compilação, prepara os artefatos em staging e os publica em `~/.blatman`:
 
-**Teste sem instalar em `/usr`:**
+- Executáveis: `~/.blatman/bin`
+- Bibliotecas: `~/.blatman/lib`
+- Headers: `~/.blatman/include`
+- Dados, manuais e repositórios Maven: `~/.blatman/share`
+
+**Teste em raiz alternativa (`BLATMAN_DESTDIR`):**
 
 ```bash
 BLATMAN_DESTDIR="$HOME/blatman-test-root" \
-  blatman install https://github.com/apache/commons-codec.git
+  blatman install [https://github.com/apache/commons-codec.git](https://github.com/apache/commons-codec.git)
 ```
 
-Nesse modo, a estrutura `usr/` é criada dentro de `~/blatman-test-root`, sem exigir `sudo` para publicar ali. É útil para inspecionar os artefatos antes de usar o destino do sistema.
+O caminho em `BLATMAN_DESTDIR` precisa ser absoluto. Nesse modo, o Blatman replica a árvore até `<HOME>/.blatman` dentro de `~/blatman-test-root`, sem tocar na sua instalação real nem alterar o `~/.bashrc`/`~/.zshrc`.
 
 ### Comandos disponíveis
 
 | Comando | Estado | Descrição |
 | --- | --- | --- |
 | `blatman build <diretório>` | ✅ Implementado | Compila um projeto local. |
-| `blatman install <URL HTTPS>` | ✅ Implementado | Clona/reutiliza, compila e prepara a instalação. |
-| `blatman help` | ✅ Implementado | Exibe a ajuda resumida. |
+| `blatman install <URL HTTPS>` | ✅ Implementado | Clona/reutiliza, compila e instala em `~/.blatman`. |
+| `blatman help` | ✅ Implementado | Exibe a ajuda resumida e as variáveis de ambiente. |
 | `blatman remove` | 🚧 Pendente | Ainda não remove pacotes instalados. |
 | `blatman update` | 🚧 Pendente | Ainda não atualiza pacotes instalados. |
 
 Atalhos reconhecidos: `-B`/`-b` para build, `-S`/`-i` para install, `-h`/`--help` para ajuda, `-R`/`-r` para remove e `-U`/`-u` para update. **Os atalhos de comandos pendentes também permanecem pendentes.**
+
+### Variáveis de ambiente
+
+| Variável | Descrição |
+| --- | --- |
+| `BLATMAN_DESTDIR` | Caminho absoluto de uma raiz alternativa para publicação isolada. |
+| `BLATMAN_BUILD_SYSTEM` | Força um sistema presente no projeto (`cmake`, `make`, `meson`, `cargo`, `npm`, `maven`, `gradle`, `autotools`, `go`, `mozillamach`). |
+| `BLATMAN_JAVA_HOME` | Seleciona explicitamente o diretório de um JDK compatível. |
+| `BLATMAN_JAVA_HEAP_MB` | Define o `-Xmx` da JVM entre `256` e `32768` MiB (padrão: `512`). |
+| `BLATMAN_JAVA_WORKERS` | Define o número máximo de workers do Gradle entre `1` e `32` (padrão: `1`). |
+| `BLATMAN_GO_PACKAGES` | Seleciona pacotes `main` em projetos Go com layout ambíguo. |
 
 ## Sistemas de build
 
@@ -125,23 +145,22 @@ O Blatman identifica os sistemas abaixo e possui fluxos de build e preparação 
 
 | Sistema | Identificação típica | Comportamento principal |
 | --- | --- | --- |
-| **CMake** | `CMakeLists.txt` | Configura/compila via CMake; usa `cmake --install` com `DESTDIR` no staging. |
-| **Make** | `Makefile`, `makefile`, `GNUmakefile` | Executa `make`; procura alvo `install` ou um executável ELF reconhecido. |
-| **Meson** | `meson.build` | Configura/compila e prepara via `meson install`. |
-| **Cargo (Rust)** | `Cargo.toml` | Consulta os metadados do workspace e seleciona executáveis produzidos. |
-| **Go** | `go.mod` ou `go.work` | Descobre pacotes e prepara executáveis Go. |
-| **npm** | `package.json` | Instala dependências, executa build e prepara pacote npm em staging. |
-| **Maven** | `pom.xml` | Executa `package` e publica artefatos num repositório Maven local de staging. |
-| **Gradle** | `build.gradle[.kts]`, `settings.gradle[.kts]` | Executa build; prepara publicações Maven e distribuições de aplicativos reconhecidas. |
-| **Autotools** | `configure`, `configure.ac`, `configure.in` | Configura/compila e utiliza o fluxo de instalação baseado em Make. |
+| **CMake** | `CMakeLists.txt` | Configura/compila com prefixo `~/.blatman`; instala em staging via `cmake --install` com `DESTDIR`. |
+| **Make** | `Makefile`, `makefile`, `GNUmakefile` | Executa `make`; usa alvo `install` com `DESTDIR`/`prefix` ou extrai um executável ELF único do `.DEFAULT_GOAL`. |
+| **Meson** | `meson.build` | Configura e compila com `meson`; ajusta diretórios no prefixo `~/.blatman`, valida destinos via `meson introspect --installed` e prepara com `meson install`. |
+| **Cargo (Rust)** | `Cargo.toml` | Consulta metadados do workspace (`--locked` quando há `Cargo.lock`), compila binários em release e copia executáveis ELF. |
+| **Go** | `go.mod` ou `go.work` | Descobre pacotes principais na raiz e em `./cmd/...` (ou via `BLATMAN_GO_PACKAGES`) e compila os executáveis. |
+| **npm** | `package.json` | Executa `npm ci`/`npm install` + `build`, empacota com `npm pack` e instala no staging validando manifesto e links `bin`. |
+| **Maven** | `pom.xml` | Executa `package` (priorizando `mvnw`) e publica artefatos num repositório Maven em `~/.blatman/share/maven-repo`. |
+| **Gradle** | `build.gradle[.kts]`, `settings.gradle[.kts]` | Executa `build` (priorizando `gradlew`); prepara publicações Maven e distribuições `application` com wrappers em `~/.blatman/bin`. |
+| **Autotools** | `configure`, `configure.ac`, `configure.in` | Executa `autoreconf -fi` (se necessário), `./configure --prefix=~/.blatman` e prepara via fluxo Make. |
+| **Mozilla Mach** | `mach` e `moz.configure` | Compila com `./mach build`, inspeciona o ambiente JSON (rejeitando alvos Android) e prepara via `./mach install` com `DESTDIR`. |
 
 Se vários sistemas coexistirem no mesmo repositório, use uma escolha explícita:
 
 ```bash
 BLATMAN_BUILD_SYSTEM=cmake blatman build .
 ```
-
-As opções aceitas são `cmake`, `make`, `meson`, `cargo`, `go`, `npm`, `maven`, `gradle`, `autotools` e `mozilla mach`.
 
 ## Java e uso de memória
 
@@ -170,18 +189,14 @@ Para projetos que precisem de mais recursos, os limites podem ser **sobrescritos
 BLATMAN_JAVA_HEAP_MB=1024 BLATMAN_JAVA_WORKERS=2 blatman build .
 ```
 
-- `BLATMAN_JAVA_HEAP_MB`: inteiro entre **256 e 32768**; padrão `512`.
-- `BLATMAN_JAVA_WORKERS`: inteiro entre **1 e 32**; padrão `1` (afeta Gradle).
-- `BLATMAN_JAVA_HOME`: seleciona explicitamente o diretório de um JDK compatível.
-
-Para Gradle, o Blatman verifica a versão e escolhe um JDK compatível entre instalações encontradas; wrappers `gradlew` e `mvnw` têm prioridade quando disponíveis. A obtenção automática de JDK pelo Gradle é desativada. A compilação Kotlin é solicitada **in-process** no Gradle.
+Para Gradle, o Blatman verifica a versão do wrapper (ou do Gradle instalado) e escolhe um JDK compatível entre `BLATMAN_JAVA_HOME`, `JAVA_HOME`, `PATH` e `/usr/lib/jvm`. Wrappers `gradlew` e `mvnw` têm prioridade quando disponíveis. O download automático de JDK pelo Gradle é desativado e a compilação Kotlin é solicitada **in-process**.
 
 > [!NOTE]
 > `-Xmx512m` limita o **heap** da JVM configurada, **não a RAM total** do Maven, Gradle ou de processos filhos. Projetos maiores podem precisar de mais memória; o perfil padrão prioriza previsibilidade em vez de desempenho máximo.
 
 ### Validação manual: Apache Commons Codec
 
-Em **20/10/2026**, o fluxo `blatman install https://github.com/apache/commons-codec.git` concluiu a compilação, os testes e a etapa de instalação no ambiente de desenvolvimento do projeto:
+Em **20/10/2026**, o fluxo `blatman install https://github.com/apache/commons-codec.git` concluiu a compilação, os testes e a etapa de instalação em versão anterior do ambiente de desenvolvimento do projeto:
 
 - **19.856 testes executados**; **0 falhas**, **0 erros** e **7 ignorados**, conforme a saída do Maven.
 - JDK 27 selecionado e opções de heap de `512 MiB` aplicadas ao Maven.
@@ -194,23 +209,25 @@ Em **20/10/2026**, o fluxo `blatman install https://github.com/apache/commons-co
 
 ```mermaid
 flowchart TD
-    A[blatman install URL] --> B[Clonar ou reutilizar cache Git]
+    A[blatman install URL] --> B[Clonar ou reutilizar ~/.blatman-cache]
     B --> C[Detectar sistema de build]
-    C --> D[Compilar como usuário comum]
-    D --> E[Preparar artefatos em staging temporário]
-    E --> F[Validar caminhos, links e conflitos]
-    F --> G{Destino de instalação}
-    G -->|Padrão| H[Solicitar sudo para publicar em /usr]
-    G -->|BLATMAN_DESTDIR| I[Publicar na raiz alternativa]
+    C --> D[Compilar com PATH e prefixo ~/.blatman]
+    D -->|Falta requisito| E[Resolver dependência interativamente]
+    E --> D
+    D -->|Sucesso| F[Preparar artefatos em staging temporário]
+    F --> G[Validar prefixo ~/.blatman, links e conflitos]
+    G --> H{Destino de instalação}
+    H -->|Padrão| I[Publicar em ~/.blatman e configurar PATH]
+    H -->|BLATMAN_DESTDIR| J[Publicar na raiz alternativa]
 ```
 
-A etapa de publicação verifica tipos de arquivos, rejeita destinos fora da árvore `usr/`, recusa conflitos já existentes e valida links simbólicos. Se uma cópia falhar, tenta desfazer os arquivos criados pela operação.
+A etapa de publicação verifica tipos de arquivos, bloqueia permissões especiais (`setuid`/`setgid`), rejeita destinos fora de `~/.blatman`, recusa conflitos já existentes e valida links simbólicos. Se uma cópia falhar no meio da operação, o Blatman executa o rollback dos arquivos e diretórios criados.
 
-Essas verificações **não tornam seguro executar código-fonte desconhecido**: scripts de build, plugins e dependências podem executar código durante a compilação. Revise a procedência do projeto antes de instalar.
+Essas verificações **não tornam seguro executar código-fonte desconhecido**: scripts de build, plugins e dependências podem executar código arbitrário durante a compilação. Revise a procedência do projeto antes de instalar.
 
 ### Cache Git
 
-Os clones ficam em **`./blatman-cache/`**, relativo ao diretório a partir do qual o Blatman foi executado. O cache permite reutilizar um checkout, mas **não executa automaticamente `git pull` ou `git fetch`** para atualizá-lo.
+Os clones ficam em **`~/.blatman-cache/`**, organizados por servidor, autor e repositório, protegidos por trava de arquivo (`flock`). O cache valida `HEAD`, `remote.origin.url` e submódulos antes de reutilizar um checkout, mas **não executa automaticamente `git pull` ou `git fetch`** para atualizar para commits mais novos.
 
 ## Testes e desenvolvimento
 
@@ -224,47 +241,50 @@ cmake --build build -j2
 ctest --test-dir build --output-on-failure
 ```
 
-A suíte registrada no CTest cobre fluxos de instalação/publicação e verificações offline. Há também scripts específicos para os sistemas de build:
-
-```bash
-python3 tests/build-system/detector.py
-python3 tests/build-system/integration.py
-```
-
-Esses scripts precisam de suas ferramentas externas correspondentes (como compilador C++, **Cargo** e **Go**), e atualmente são executados **separadamente** do CTest. Alguns testes geram arquivos e logs temporários no diretório de testes.
+A suíte registrada no CTest (`tests/regression.py` e `blatman-publication-test`) cobre fluxos de instalação/publicação e verificações offline. Há também scripts específicos para os sistemas de build em `tests/build-system/` (como `detector.py` e `integration.py`), que dependem das ferramentas externas correspondentes e são executados separadamente do CTest.
 
 ### Organização do código
 
 ```text
 blatman/
-├── include/                 # Interfaces públicas internas dos módulos
-│   └── operations/          # Contratos dos comandos
+├── include/                                # Interfaces internas dos módulos
+│   ├── operations/
+│   │   ├── builder/                        # build, detecção, Java, Meson, Mozilla e workflow
+│   │   └── installation/                   # install, transação, dependências e helpers
+│   │       ├── base/                       # Caminhos padrão (~/.blatman)
+│   │       └── details/                    # Contratos específicos (ex.: Mozilla Mach)
+│   └── pkg/                                # Detecção e abstração de gerenciadores do sistema
 ├── src/
-│   ├── operations/          # build, install, help, remove, update
-│   ├── builderDetector.cpp  # Identificação dos sistemas de build
-│   ├── javaSupport.cpp      # Maven, Gradle, JDK e limites de memória
-│   ├── projectWorkflow.cpp  # Fluxo de build e instalação
-│   ├── nativeInstall.cpp    # Preparação dos artefatos em staging
-│   ├── installTransaction.cpp # Validação e publicação no destino
-│   └── shell.cpp            # Execução e captura dos comandos externos
-├── tests/                   # Regressão e testes de integração
+│   ├── main.cpp                            # Entrada CLI e bloqueio de execução como root
+│   ├── logger.cpp                          # Registro de logs com timestamp
+│   ├── pathSetup.cpp                       # Resolução de HOME e escrita no .bashrc/.zshrc
+│   ├── shell.cpp                           # Execução e captura de comandos externos
+│   ├── operations/
+│   │   ├── help.cpp / remove.cpp / update.cpp
+│   │   ├── builder/                        # Implementação dos builders e detector
+│   │   └── installation/                   # Staging, parser de requisitos e publicação
+│   │       ├── base/
+│   │       └── details/                    # Submódulos Meson e Mozilla Mach
+│   └── pkg/                                # Suporte a pacman, apt, dnf, zypper, xbps e brew
+├── tests/                                  # Suíte de regressão e testes por sistema
 └── CMakeLists.txt
 ```
 
 ## Limitações conhecidas
 
-1. **`remove` e `update` ainda não estão implementados.** Não existe, nesta fase, uma base completa de pacotes instalados com operações de desinstalação/atualização.
-2. **Clones em cache não são atualizados automaticamente.** Reutilizar um cache pode significar compilar uma revisão anterior do repositório.
+1. **`remove` e `update` ainda não estão implementados.** Ainda não há uma base persistente de pacotes instalados para desinstalação ou atualização.
+2. **Clones em cache não são atualizados automaticamente.** Reutilizar um repositório em `~/.blatman-cache/` pode compilar uma revisão anterior caso ele já exista localmente.
 3. **Instalação não é sinônimo de build.** Projetos sem receita de instalação compatível podem compilar corretamente e mesmo assim não produzir artefatos instaláveis.
-4. **Publicação em `/usr` evita conflitos em vez de sobrescrever arquivos existentes.** Uma reinstalação pode ser recusada se os caminhos de destino já estiverem ocupados.
-5. **Resolução de dependências é assistida e parcial.** O Blatman reconhece determinados padrões de erros; não resolve automaticamente toda dependência possível.
+4. **Publicação evita conflitos em vez de sobrescrever arquivos.** Uma reinstalação em `~/.blatman` é recusada se os caminhos de destino já estiverem ocupados.
+5. **Resolução de dependências é assistida e parcial.** O Blatman reconhece determinados padrões de erro; não resolve automaticamente qualquer dependência possível.
 6. **O alvo atual é Linux.** Não há suporte declarado para Windows ou macOS, nem garantia de compatibilidade com toda distribuição Linux.
 
 ## Roadmap
 
 - [x] Interface única para build e instalação a partir de Git
-- [x] Detecção de nove sistemas de build
-- [x] Preparação e validação de artefatos antes da publicação
+- [x] Detecção de dez sistemas de build (incluindo Mozilla Mach)
+- [x] Instalação isolada em `~/.blatman` com configuração de ambiente e `PATH`
+- [x] Preparação, validação e rollback de artefatos em staging
 - [x] Suporte a Maven/Gradle com perfil econômico de memória
 - [x] Testes de regressão e integração
 - [ ] Registro e rastreamento dos pacotes instalados
